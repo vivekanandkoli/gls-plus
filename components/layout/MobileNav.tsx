@@ -2,39 +2,35 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  ArrowLeftRight,
-  BarChart3,
-  FileText,
-  LayoutDashboard,
+  LogOut,
   Menu,
-  Settings2,
-  Users,
   X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight  },
-  { href: "/invoices",     label: "Invoices",     icon: FileText        },
-  { href: "/clients",      label: "Clients",      icon: Users           },
-  { href: "/reports",      label: "Reports",      icon: BarChart3       },
-  { href: "/settings",     label: "Settings",     icon: Settings2       },
-] as const;
+import { getSupabaseClient } from "@/lib/supabase";
+import { PRIMARY_NAV } from "@/components/layout/app-nav-config";
 
 export function MobileNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  async function handleSignOut() {
+    setOpen(false);
+    await getSupabaseClient().auth.signOut();
+    router.refresh();
+    router.push("/login");
+  }
 
   return (
     <>
       {/* Hamburger bar — only visible on mobile */}
       <header
-        className="md:hidden flex h-14 items-center justify-between px-4 border-b"
+        className="md:hidden sticky top-0 z-30 flex h-14 items-center justify-between px-4 border-b backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/90"
         style={{ background: "var(--sidebar)", borderColor: "var(--sidebar-border)" }}
       >
         <div className="flex items-center gap-3">
@@ -53,12 +49,13 @@ export function MobileNav() {
           </span>
         </div>
         <button
+          type="button"
           onClick={() => setOpen(true)}
           aria-label="Open menu"
-          className="rounded-md p-2 transition-colors"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-offset-2"
           style={{ color: "var(--sidebar-foreground)" }}
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
       </header>
 
@@ -104,18 +101,19 @@ export function MobileNav() {
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setOpen(false)}
             aria-label="Close menu"
-            className="rounded-md p-1.5"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-offset-2"
             style={{ color: "rgba(245,240,232,0.6)" }}
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
         {/* Nav items */}
         <div className="flex flex-col gap-0.5 p-3 flex-1">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {PRIMARY_NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname?.startsWith(href + "/");
             return (
               <Link
@@ -123,7 +121,7 @@ export function MobileNav() {
                 href={href}
                 onClick={() => setOpen(false)}
                 className={cn(
-                  "group flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-colors relative",
+                  "group flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-all duration-200 ease-out relative",
                   active
                     ? "text-sidebar-accent-foreground bg-sidebar-accent"
                     : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60"
@@ -142,12 +140,27 @@ export function MobileNav() {
           })}
         </div>
 
-        {/* Footer */}
+        {/* Footer — sign-out */}
         <div
-          className="px-5 py-4 text-xs"
-          style={{ borderTop: "1px solid var(--sidebar-border)", color: "rgba(245,240,232,0.3)", letterSpacing: "0.08em" }}
+          className="px-4 py-3 flex items-center justify-between"
+          style={{ borderTop: "1px solid var(--sidebar-border)" }}
         >
-          EST. 2007 · BANGKOK
+          <span
+            className="text-xs"
+            style={{ color: "rgba(245,240,232,0.3)", letterSpacing: "0.08em" }}
+          >
+            EST. 2007 · BANGKOK
+          </span>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            aria-label="Sign out of GLS Plus"
+            className="flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-offset-2"
+            style={{ color: "rgba(245,240,232,0.5)" }}
+          >
+            <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Sign out
+          </button>
         </div>
       </nav>
     </>

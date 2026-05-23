@@ -7,10 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "migrate:stock": "tsx scripts/migrate.ts"
+    "migrate:stock": "tsx scripts/migrate.ts",
+    "seed:demo-users": "tsx scripts/seed-demo-users.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.104.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

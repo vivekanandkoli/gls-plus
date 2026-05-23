@@ -1,6 +1,10 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ─── Next.js ──────────────────────────────────────────────────────────────────
+/.next/
+/out/
+/build
+next-env.d.ts
 
-# dependencies
+# ─── Node ─────────────────────────────────────────────────────────────────────
 /node_modules
 /.pnp
 .pnp.*
@@ -9,33 +13,112 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+package-lock.json.bak
 
-# testing
+# ─── TypeScript ───────────────────────────────────────────────────────────────
+*.tsbuildinfo
+# Auto-generated Supabase types — regenerate with: supabase gen types typescript --linked
+lib/database.types.ts
+
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.test
+
+# ─── Supabase ─────────────────────────────────────────────────────────────────
+/supabase/.branches
+/supabase/.temp
+/.supabase
+
+# ─── Sentry ───────────────────────────────────────────────────────────────────
+.sentryclirc
+sentry.properties
+
+# ─── Vercel ───────────────────────────────────────────────────────────────────
+.vercel
+
+# ─── Production audit artifacts ───────────────────────────────────────────────
+.commitshow/
+
+# ─── Python (scripts / venv) ──────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+*.egg
+
+# ─── Testing & Coverage ───────────────────────────────────────────────────────
 /coverage
+/.nyc_output
+/playwright-report
+/test-results
+*.snap
 
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+lerna-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# ─── Cursor IDE ───────────────────────────────────────────────────────────────
+.cursor/debug-*.log
+.cursor/*.log
 
-# vercel
-.vercel
+# ─── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ─── Windows ──────────────────────────────────────────────────────────────────
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ─── Linux ────────────────────────────────────────────────────────────────────
+*~
+
+# ─── Editors ──────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+.vscode/settings.json
+.vscode/launch.json
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# ─── Certificates & Keys ──────────────────────────────────────────────────────
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+
+# ─── Misc artefacts ───────────────────────────────────────────────────────────
+*.tgz
+*.zip
+*.tar.gz
+/tmp/
+/temp/
+
+# Stray MCP / tool-generated markdown files at the project root
+/## Table*.md
+"## Table*.md"
+## Table*.md

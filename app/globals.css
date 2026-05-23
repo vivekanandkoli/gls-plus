@@ -88,6 +88,10 @@
   --sidebar-ring: #c9a227;
   /* Gold gradient for accent elements */
   --gold-gradient: linear-gradient(135deg, #c9a227, #e8c84a);
+  /* Elevation — restrained, print-friendly */
+  --shadow-sm: 0 1px 2px rgba(28, 25, 23, 0.05);
+  --shadow-card: 0 1px 3px rgba(28, 25, 23, 0.06), 0 8px 24px rgba(28, 25, 23, 0.04);
+  --header-blur: saturate(1.2) blur(10px);
 }
 
 .dark {
@@ -123,27 +127,70 @@
   --sidebar-border: rgba(201, 162, 39, 0.18);
   --sidebar-ring: #c9a227;
   --gold-gradient: linear-gradient(135deg, #c9a227, #e8c84a);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.25), 0 10px 28px rgba(0, 0, 0, 0.2);
+  --header-blur: saturate(1.1) blur(12px);
+}
+
+@layer utilities {
+  .app-content {
+    width: 100%;
+    max-width: min(100%, 80rem);
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
   }
   html {
-    @apply font-sans;
+    @apply font-sans scroll-smooth;
   }
   h1, h2 {
     font-family: var(--font-heading);
     font-weight: 600;
     letter-spacing: 0.01em;
   }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 28%, transparent);
+    color: var(--foreground);
+  }
+  /* Visible focus — WCAG 2.2 / ui-a11y */
+  :where(
+      button,
+      a,
+      input,
+      select,
+      textarea,
+      summary,
+      [role="button"],
+      [role="tab"]
+    ):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
   /* Tabular numbers for aligned figures in tables and KPI cards */
   table, .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html {
+    scroll-behavior: auto;
   }
 }
 

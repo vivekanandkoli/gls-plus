@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { MobileNav } from "@/components/layout/MobileNav";
-import { Sidebar } from "@/components/layout/Sidebar";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -26,6 +24,7 @@ const cormorantGaramond = Cormorant_Garamond({
 export const metadata: Metadata = {
   title: "GLS Plus",
   description: "Gold business dashboard",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({
@@ -39,13 +38,7 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} ${cormorantGaramond.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <div className="flex min-h-screen w-full">
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <MobileNav />
-            {children}
-          </div>
-        </div>
+        {children}
       </body>
     </html>
   );

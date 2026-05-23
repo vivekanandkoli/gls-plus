@@ -1,6 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 
-let _client: ReturnType<typeof createClient> | null = null;
+let _client: ReturnType<typeof createBrowserClient> | null = null;
 
 /** Returns null if the browser can talk to Supabase; otherwise a short fix hint (no throw). */
 export function getSupabaseBrowserConfigError(): string | null {
@@ -31,15 +31,11 @@ export function getSupabaseClient() {
     );
   }
 
-  _client = createClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      db: {
-        schema: "gls",
-      },
-    } as any
-  );
+  _client = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    db: {
+      schema: "gls",
+    },
+  } as any);
   return _client;
 }
 

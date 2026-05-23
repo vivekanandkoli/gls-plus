@@ -2,29 +2,24 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  ArrowLeftRight,
-  BarChart3,
-  FileText,
-  LayoutDashboard,
-  Settings2,
-  Users,
+  LogOut,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-
-const navItems = [
-  { href: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight  },
-  { href: "/invoices",     label: "Invoices",     icon: FileText        },
-  { href: "/clients",      label: "Clients",      icon: Users           },
-  { href: "/reports",      label: "Reports",      icon: BarChart3       },
-  { href: "/settings",     label: "Settings",     icon: Settings2       },
-] as const;
+import { getSupabaseClient } from "@/lib/supabase";
+import { PRIMARY_NAV } from "@/components/layout/app-nav-config";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    await getSupabaseClient().auth.signOut();
+    router.refresh();
+    router.push("/login");
+  }
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:border-r md:bg-sidebar md:text-sidebar-foreground"
@@ -80,14 +75,14 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex flex-col gap-0.5 p-3 flex-1">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {PRIMARY_NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname?.startsWith(href + "/");
           return (
             <Link
               key={href}
               href={href}
               className={cn(
-                "group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors relative",
+                "group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-200 ease-out relative",
                 active
                   ? "text-sidebar-accent-foreground bg-sidebar-accent"
                   : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/60"
@@ -112,16 +107,26 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer tagline */}
+      {/* Footer — tagline + sign-out */}
       <div
-        className="px-5 py-4 text-xs"
-        style={{
-          borderTop: "1px solid var(--sidebar-border)",
-          color: "rgba(245, 240, 232, 0.35)",
-          letterSpacing: "0.08em",
-        }}
+        className="px-4 py-3 flex items-center justify-between"
+        style={{ borderTop: "1px solid var(--sidebar-border)" }}
       >
-        EST. 2007 · BANGKOK
+        <span
+          className="text-xs"
+          style={{ color: "rgba(245, 240, 232, 0.35)", letterSpacing: "0.08em" }}
+        >
+          EST. 2007 · BANGKOK
+        </span>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          aria-label="Sign out of GLS Plus"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-offset-2"
+          style={{ color: "rgba(245,240,232,0.45)" }}
+        >
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
     </aside>
   );
