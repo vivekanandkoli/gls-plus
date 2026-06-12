@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -37,7 +37,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getSupabaseClient } from "@/lib/supabase";
+import { triggerWacRecalculate } from "@/lib/wac-client";
 import { cn } from "@/lib/utils";
+import { useAppUser } from "@/hooks/use-app-user";
 import {
   annotateRunningBalance,
   buildErrorReport,
@@ -100,6 +102,21 @@ function SummaryCard({
 
 export default function ImportPage() {
   const router = useRouter();
+  const { isAdmin, loading: authLoading } = useAppUser();
+
+  useEffect(() => {
+    if (!authLoading && !isAdmin) {
+      router.replace("/transactions");
+    }
+  }, [authLoading, isAdmin, router]);
+
+  if (authLoading || !isAdmin) {
+    return (
+      <PageWrapper title="Import transactions" description="Loading…">
+        <p className="text-sm text-muted-foreground">Checking access…</p>
+      </PageWrapper>
+    );
+  }
 
   // ── Step 1: file upload state ────────────────────────────────────────────────
   const [step, setStep] = useState<Step>(1);
@@ -348,7 +365,12 @@ export default function ImportPage() {
     let skippedDupe = 0;
     let overwritten = 0;
     let failed = 0;
+    let minImportDate: string | null = null;
     const failedRows: { row: number; error: string }[] = [];
+
+    function noteImportDate(dateIso: string) {
+      if (!minImportDate || dateIso < minImportDate) minImportDate = dateIso;
+    }
 
     for (let i = 0; i < toImport.length; i += BATCH_SIZE) {
       const batch = toImport.slice(i, i + BATCH_SIZE);
@@ -385,6 +407,7 @@ export default function ImportPage() {
                 .from("stock_ledger")
                 .update({ balance_grams: runningBalance, recorded_at: row.dateIso })
                 .eq("transaction_id", existing.id);
+              noteImportDate(row.dateIso);
               overwritten++;
             } else {
               // Doesn't actually exist — treat as fresh insert.
@@ -408,6 +431,7 @@ export default function ImportPage() {
                 balance_grams: runningBalance,
                 recorded_at: row.dateIso,
               });
+              noteImportDate(row.dateIso);
               inserted++;
             }
           } else {
@@ -432,6 +456,7 @@ export default function ImportPage() {
               balance_grams: runningBalance,
               recorded_at: row.dateIso,
             });
+            noteImportDate(row.dateIso);
             inserted++;
           }
         } catch (e: unknown) {
@@ -463,6 +488,13 @@ export default function ImportPage() {
       failed,
       failedRows,
     });
+    if (minImportDate) {
+      try {
+        await triggerWacRecalculate(minImportDate);
+      } catch (e) {
+        console.error("WAC recalc after import failed:", e);
+      }
+    }
     setImportProgress(100);
     setImportDone(true);
   }, [rows, dupeAction, invalidAction, errorCount, dupeCount, openingBalance, currentSystemBalance, useFileOpeningBalance]);

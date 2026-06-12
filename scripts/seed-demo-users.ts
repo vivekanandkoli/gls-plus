@@ -32,6 +32,7 @@ const supabase = createClient(url, serviceRole, {
     autoRefreshToken: false,
     persistSession: false,
   },
+  db: { schema: "gls" },
 });
 
 async function ensureAuthUser(opts: {
@@ -49,25 +50,43 @@ async function ensureAuthUser(opts: {
   }
   const existing = list.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
 
+  let authId: string;
+
   if (existing) {
-    const { error } = await supabase.auth.admin.updateUserById(existing.id, {
+    const { data, error } = await supabase.auth.admin.updateUserById(existing.id, {
       password,
       email_confirm: true,
       user_metadata: { ...existing.user_metadata, app_role },
     });
     if (error) throw new Error(`updateUser ${email}: ${error.message}`);
+    authId = data.user.id;
     console.log("Updated:", email);
-    return;
+  } else {
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { app_role },
+    });
+    if (error) throw new Error(`createUser ${email}: ${error.message}`);
+    authId = data.user.id;
+    console.log("Created:", email);
   }
 
-  const { error } = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { app_role },
-  });
-  if (error) throw new Error(`createUser ${email}: ${error.message}`);
-  console.log("Created:", email);
+  const role = app_role === "admin" ? "admin" : "user";
+  const { error: profileErr } = await supabase.from("users").upsert(
+    {
+      auth_id: authId,
+      email,
+      role,
+      is_active: true,
+    },
+    { onConflict: "auth_id" }
+  );
+  if (profileErr) {
+    console.warn(`gls.users sync for ${email}:`, profileErr.message);
+    console.warn("Run scripts/rbac-migration.sql if the users table is missing.");
+  }
 }
 
 async function main() {

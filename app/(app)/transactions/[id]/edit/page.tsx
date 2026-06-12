@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
+import { SellPlPreviewCard } from "@/components/transactions/TransactionPlDisplay";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -33,6 +34,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getSupabaseClient } from "@/lib/supabase";
+import { useAppUser } from "@/hooks/use-app-user";
+import { useCurrentWac } from "@/hooks/use-current-wac";
+import type { TransactionStatus } from "@/lib/rbac";
 
 type ClientRow = { id: string; name: string };
 
@@ -51,6 +55,8 @@ type FormValues = z.output<typeof schema>;
 export default function EditTransactionPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { user, isAdmin, loading: authLoading } = useAppUser();
+  const { currentWac, stockGm, loading: wacLoading } = useCurrentWac();
 
   const [clientsOpen, setClientsOpen] = useState(false);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -61,6 +67,15 @@ export default function EditTransactionPage() {
   const [invoiceNumber, setInvoiceNumber] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
+  const [txStatus, setTxStatus] = useState<TransactionStatus>("pending");
+
+  // Admin invoice edit state
+  const [invoiceEditing, setInvoiceEditing] = useState(false);
+  const [invoiceDraft, setInvoiceDraft] = useState("");
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [invoiceSaving, setInvoiceSaving] = useState(false);
+  const [invoiceSuccess, setInvoiceSuccess] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema) as any,
@@ -94,6 +109,7 @@ export default function EditTransactionPage() {
 
   // Load existing transaction on mount.
   useEffect(() => {
+    if (authLoading) return;
     const run = async () => {
       setLoadingTx(true);
       try {
@@ -101,13 +117,35 @@ export default function EditTransactionPage() {
         const { data, error } = await supabase
           .from("transactions")
           .select(
-            "id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,client_id,client:clients(id,name)"
+            "id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,client_id,status,created_by,client:clients(id,name)"
           )
           .eq("id", id)
           .single();
 
         if (error || !data) {
           setNotFound(true);
+          return;
+        }
+
+        setTxStatus((data.status as TransactionStatus) ?? "pending");
+
+        if (data.status === "approved" && !isAdmin) {
+          setBlockedMessage("This transaction is approved and cannot be edited.");
+          return;
+        }
+
+        if (
+          !isAdmin &&
+          data.created_by != null &&
+          user?.id != null &&
+          data.created_by !== user.id
+        ) {
+          setBlockedMessage("You can only edit your own transactions.");
+          return;
+        }
+
+        if (!isAdmin && data.status !== "pending" && data.status !== "rejected") {
+          setBlockedMessage("This transaction cannot be edited.");
           return;
         }
 
@@ -136,7 +174,7 @@ export default function EditTransactionPage() {
       }
     };
     void run();
-  }, [id, form]);
+  }, [id, form, isAdmin, user?.id, authLoading]);
 
   // Load clients when dropdown opens.
   useEffect(() => {
@@ -168,46 +206,25 @@ export default function EditTransactionPage() {
   async function onSubmit(values: FormValues) {
     setSubmitting(true);
     try {
-      const supabase = getSupabaseClient() as any;
       const dateIso = format(values.date, "yyyy-MM-dd");
-      const amountThb = values.weightGrams * values.ratePerGram;
-      const newDelta =
-        values.type === "BUY" ? values.weightGrams : -values.weightGrams;
 
-      // Update the transaction record.
-      const { error: txErr } = await supabase
-        .from("transactions")
-        .update({
-          client_id: values.clientId,
+      const res = await fetch(`/api/transactions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: values.clientId,
           type: values.type,
           date: dateIso,
-          weight_grams: values.weightGrams,
-          rate_per_gram: values.ratePerGram,
-          amount_thb: amountThb,
-          vat_percent: values.vatPercent,
+          weightGrams: values.weightGrams,
+          ratePerGram: values.ratePerGram,
+          vatPercent: values.vatPercent,
           notes: values.notes?.trim() || null,
-        })
-        .eq("id", id);
-      if (txErr) throw txErr;
+        }),
+      });
 
-      // Update the linked stock_ledger entry's delta if it exists.
-      const { data: ledger } = await supabase
-        .from("stock_ledger")
-        .select("id,delta_grams,balance_grams")
-        .eq("transaction_id", id)
-        .maybeSingle();
-
-      if (ledger) {
-        const oldDelta = typeof ledger.delta_grams === "number" ? ledger.delta_grams : 0;
-        const deltaChange = newDelta - oldDelta;
-        await supabase
-          .from("stock_ledger")
-          .update({
-            delta_grams: newDelta,
-            balance_grams: (ledger.balance_grams ?? 0) + deltaChange,
-            date: dateIso,
-          })
-          .eq("id", ledger.id);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Update failed");
       }
 
       router.push("/transactions");
@@ -218,11 +235,50 @@ export default function EditTransactionPage() {
     }
   }
 
-  if (loadingTx) {
+  async function saveInvoiceNumber() {
+    if (!invoiceDraft.trim()) return;
+    setInvoiceSaving(true);
+    setInvoiceError(null);
+    try {
+      const res = await fetch(`/api/transactions/${id}/invoice`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceNumber: invoiceDraft.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setInvoiceError(typeof data.error === "string" ? data.error : "Failed to update invoice number");
+        return;
+      }
+      setInvoiceNumber(invoiceDraft.trim());
+      setInvoiceEditing(false);
+      setInvoiceSuccess(true);
+      setTimeout(() => setInvoiceSuccess(false), 3000);
+    } catch {
+      setInvoiceError("Failed to update invoice number");
+    } finally {
+      setInvoiceSaving(false);
+    }
+  }
+
+  if (loadingTx || authLoading) {
     return (
       <PageWrapper title="Edit transaction">
         <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
           Loading...
+        </div>
+      </PageWrapper>
+    );
+  }
+
+  if (blockedMessage) {
+    return (
+      <PageWrapper title="Edit transaction">
+        <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground space-y-3">
+          <p>{blockedMessage}</p>
+          <Button variant="outline" asChild size="sm">
+            <Link href={`/transactions/${id}`}>View transaction</Link>
+          </Button>
         </div>
       </PageWrapper>
     );
@@ -249,8 +305,90 @@ export default function EditTransactionPage() {
           type === "BUY" ? "border-emerald-200" : "border-amber-200"
         )}
       >
+        {/* ── Invoice number: admin editable, user read-only ── */}
+        {invoiceNumber && (
+          <div className="mb-6">
+            {isAdmin ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  Invoice # (admin only)
+                </label>
+                {invoiceEditing ? (
+                  <div className="space-y-1">
+                    <div className="flex gap-2">
+                      <Input
+                        value={invoiceDraft}
+                        onChange={(e) => {
+                          setInvoiceDraft(e.target.value);
+                          setInvoiceError(null);
+                        }}
+                        className="border-amber-400 font-mono text-sm focus-visible:ring-amber-400"
+                        autoFocus
+                      />
+                      <Button
+                        size="sm"
+                        onClick={saveInvoiceNumber}
+                        disabled={invoiceSaving || !invoiceDraft.trim()}
+                      >
+                        {invoiceSaving ? "Saving…" : "Save"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setInvoiceEditing(false);
+                          setInvoiceError(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                    {invoiceError && (
+                      <p className="text-xs text-red-600">{invoiceError}</p>
+                    )}
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      Changing invoice number will update all audit log references. This action is logged.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="rounded border border-amber-300 bg-amber-50 px-2.5 py-1 font-mono text-sm dark:bg-amber-950/30">
+                      {invoiceNumber}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-amber-600 hover:text-amber-800"
+                      onClick={() => {
+                        setInvoiceDraft(invoiceNumber ?? "");
+                        setInvoiceEditing(true);
+                        setInvoiceError(null);
+                      }}
+                      title="Edit invoice number"
+                    >
+                      ✏️
+                    </Button>
+                    {invoiceSuccess && (
+                      <span className="text-xs text-emerald-600">Invoice number updated ✓</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                <label className="text-xs font-medium text-muted-foreground">Invoice #</label>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-mono">{invoiceNumber}</span>
+                  <span className="text-xs text-muted-foreground">(invoice number is not changed on edit)</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Only admins or pending/rejected txns can change the type */}
             <FormField
               control={form.control}
               name="type"
@@ -425,6 +563,17 @@ export default function EditTransactionPage() {
               </FormItem>
             </div>
 
+            {/* SELL P&L preview card — only shown for pending/rejected (can still be edited) */}
+            {type === "SELL" && txStatus !== "approved" && (
+              <SellPlPreviewCard
+                weightGrams={Number.isFinite(weight) ? weight : 0}
+                ratePerGram={Number.isFinite(rate) ? rate : 0}
+                currentWac={currentWac}
+                stockGm={stockGm}
+                loading={wacLoading}
+              />
+            )}
+
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -464,13 +613,6 @@ export default function EditTransactionPage() {
                 )}
               />
             </div>
-
-            {invoiceNumber && (
-              <div className="text-xs text-muted-foreground">
-                Invoice #: <span className="font-mono">{invoiceNumber}</span>
-                {" "}(invoice number is not changed on edit)
-              </div>
-            )}
 
             <div className="flex items-center justify-between gap-3">
               <Button variant="outline" asChild>

@@ -47,6 +47,22 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { formatSupabaseQueryError } from "@/lib/supabase-errors";
 import { cn, embeddedClientName, formatCurrency } from "@/lib/utils";
 import { PrintInvoiceButton } from "@/components/PrintInvoice";
+import { TransactionStatusBadge } from "@/components/transactions/TransactionStatusBadge";
+import { RejectTransactionDialog } from "@/components/transactions/RejectTransactionDialog";
+import {
+  TransactionPlCells,
+  TransactionPlDetailBlock,
+  wacPlFromRow,
+} from "@/components/transactions/TransactionPlDisplay";
+import { useTransactionWac } from "@/hooks/use-transaction-wac";
+import { useAppUser } from "@/hooks/use-app-user";
+import { isRateDeviationAlert, type AppUser, type TransactionStatus } from "@/lib/rbac";
+import {
+  canDeleteTransaction,
+  canEditTransaction,
+} from "@/lib/transaction-permissions";
+import { WAC_MIGRATION_SQL } from "@/lib/wac-columns";
+import type { WacPlEntry } from "@/lib/wac-ledger";
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
@@ -214,38 +230,20 @@ function StockAdjustDialog({
     setSaving(true);
     setError(null);
     try {
-      const supabase = getSupabaseClient() as any;
-
-      const { data: lastLedger } = await supabase
-        .from("stock_ledger")
-        .select("balance_grams")
-        .order("recorded_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const latestBalance =
-        typeof lastLedger?.balance_grams === "number" ? lastLedger.balance_grams : 0;
-
-      const delta = mode === "set" ? parsedGrams - latestBalance : parsedGrams;
-      const newBalance = mode === "set" ? parsedGrams : latestBalance + parsedGrams;
-
-      // Legacy gls.stock_ledger (and import/migrate path) uses recorded_at only — no `date` column.
-      // Delta is preserved in audit_log metadata.
-      const payload: Record<string, unknown> = {
-        transaction_id: null,
-        balance_grams: newBalance,
-        recorded_at: date,
-      };
-
-      const { error: insertErr } = await supabase.from("stock_ledger").insert(payload);
-      if (insertErr) throw insertErr;
-
-      const { error: auditErr } = await supabase.from("audit_log").insert({
-        event_type: "stock_adjustment",
-        description: `Manual stock adjustment: ${mode === "set" ? "set to" : "delta"} ${parsedGrams} g. New balance: ${newBalance.toFixed(4)} g.${notes.trim() ? " Reason: " + notes.trim() : ""}`,
-        metadata: { mode, date, parsedGrams, delta, newBalance, notes: notes.trim() || null },
+      const res = await fetch("/api/stock/adjust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          grams: parsedGrams,
+          date,
+          notes: notes.trim(),
+        }),
       });
-      if (auditErr) console.warn("audit_log insert skipped:", auditErr);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Adjustment failed");
+      }
 
       setGrams("");
       setNotes("");
@@ -366,10 +364,18 @@ type TxRow = {
   id: string;
   date: string;
   type: "BUY" | "SELL";
+  transaction_mode?: string | null;
   invoice_number: string | null;
   weight_grams: number | null;
   rate_per_gram: number | null;
   amount_thb: number | null;
+  status?: TransactionStatus;
+  created_by?: number | null;
+  rejection_reason?: string | null;
+  wac_at_sale?: number | null;
+  cost_of_sale?: number | null;
+  profit_loss?: number | null;
+  pl_percent?: number | null;
   client: { name: string } | { name: string }[] | null;
 };
 
@@ -378,6 +384,8 @@ type TxDetail = TxRow & {
   notes: string | null;
   client_id: string | null;
 };
+
+type StatusFilter = "ALL" | TransactionStatus;
 
 const PAGE_SIZE = 50;
 
@@ -408,18 +416,31 @@ function toCsvDownload(filename: string, csv: string) {
 
 function TransactionDetailDialog({
   txId,
+  wacDbEnabled,
+  plById,
+  appUser,
+  isAdmin,
   onClose,
   onDeleted,
+  onUpdated,
 }: {
   txId: string | null;
+  wacDbEnabled: boolean;
+  plById: Map<string, WacPlEntry>;
+  appUser: AppUser | null;
+  isAdmin: boolean;
   onClose: () => void;
   onDeleted: () => void;
+  onUpdated: () => void;
 }) {
   const router = useRouter();
   const [tx, setTx] = useState<TxDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!txId) { setTx(null); return; }
@@ -427,10 +448,13 @@ function TransactionDetailDialog({
     const run = async () => {
       try {
         const supabase = getSupabaseClient() as any;
+        const wacSelect = wacDbEnabled
+          ? ",wac_at_sale,cost_of_sale,profit_loss,pl_percent"
+          : "";
         const { data, error } = await supabase
           .from("transactions")
           .select(
-            "id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,client_id,client:clients(name)"
+            `id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,client_id,status,created_by,rejection_reason${wacSelect},client:clients(name)`
           )
           .eq("id", txId)
           .single();
@@ -440,24 +464,88 @@ function TransactionDetailDialog({
       }
     };
     void run();
-  }, [txId]);
+  }, [txId, wacDbEnabled]);
 
   const handleDelete = async () => {
     if (!tx) return;
     setIsDeleting(true);
     try {
-      const supabase = getSupabaseClient() as any;
-      await supabase.from("stock_ledger").delete().eq("transaction_id", tx.id);
-      await supabase.from("transactions").delete().eq("id", tx.id);
+      const res = await fetch(`/api/transactions/${tx.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Delete failed");
       setConfirmDelete(false);
       onClose();
       onDeleted();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Delete failed");
     } finally {
       setIsDeleting(false);
     }
   };
 
+  const handleApprove = async () => {
+    if (!tx) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/transactions/${tx.id}/approve`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Approve failed");
+      onClose();
+      onUpdated();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Approve failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReject = async (reason: string) => {
+    if (!tx) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/transactions/${tx.id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Reject failed");
+      setRejectOpen(false);
+      onClose();
+      onUpdated();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Reject failed");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResubmit = () => {
+    if (tx) router.push(`/transactions/${tx.id}/edit`);
+  };
+
+  const txRecord = tx
+    ? {
+        ...tx,
+        status: (tx.status ?? "pending") as TransactionStatus,
+        created_by: tx.created_by ?? null,
+      }
+    : null;
+  const canEdit = txRecord && appUser ? canEditTransaction(appUser, txRecord) : false;
+  const canDelete = txRecord && appUser ? canDeleteTransaction(appUser, txRecord) : false;
+  const canApprove = isAdmin && tx?.status === "pending";
+  const canReject = isAdmin && tx?.status === "pending";
+  const canResubmit =
+    !isAdmin && tx?.status === "rejected" && tx.created_by === appUser?.id;
+
   const clientName = tx ? (embeddedClientName(tx.client) ?? "-") : "-";
+  const pl = tx
+    ? wacDbEnabled
+      ? wacPlFromRow(tx)
+      : plById.get(tx.id)
+    : undefined;
 
   return (
     <>
@@ -475,10 +563,24 @@ function TransactionDetailDialog({
 
           {!loading && tx && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <TransactionTypeBadge type={tx.type} />
+                <TransactionStatusBadge status={(tx.status ?? "pending") as TransactionStatus} />
                 <span className="text-sm text-muted-foreground">{tx.date}</span>
               </div>
+
+              {tx.status === "rejected" && tx.rejection_reason && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
+                  <span className="font-medium">Rejection reason: </span>
+                  {tx.rejection_reason}
+                </div>
+              )}
+
+              {actionError && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  {actionError}
+                </div>
+              )}
 
               <div className="rounded-lg border divide-y text-sm">
                 {[
@@ -486,11 +588,19 @@ function TransactionDetailDialog({
                   ["Weight", tx.weight_grams != null ? `${tx.weight_grams.toLocaleString()} g` : "-"],
                   ["Rate", tx.rate_per_gram != null ? `${tx.rate_per_gram.toLocaleString()} THB/g` : "-"],
                   ["Amount", tx.amount_thb != null ? formatCurrency(tx.amount_thb, "THB", "th-TH") : "-"],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-start gap-3 px-3 py-2">
+                    <span className="w-36 shrink-0 text-muted-foreground">{label}</span>
+                    <span className="font-medium">{value}</span>
+                  </div>
+                ))}
+                <TransactionPlDetailBlock type={tx.type} pl={pl} />
+                {[
                   ["VAT", tx.vat_percent != null && tx.vat_percent > 0 ? `${tx.vat_percent}%` : "0%"],
                   ["Notes", tx.notes ?? "-"],
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-start gap-3 px-3 py-2">
-                    <span className="w-20 shrink-0 text-muted-foreground">{label}</span>
+                    <span className="w-36 shrink-0 text-muted-foreground">{label}</span>
                     <span className="font-medium">{value}</span>
                   </div>
                 ))}
@@ -499,15 +609,41 @@ function TransactionDetailDialog({
           )}
 
           <DialogFooter className="gap-2 flex-wrap">
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={loading || !tx}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete
-            </Button>
+            {canDelete && (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={loading || !tx}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete
+              </Button>
+            )}
             <div className="flex-1" />
+            {canReject && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loading || actionLoading}
+                onClick={() => setRejectOpen(true)}
+              >
+                Reject
+              </Button>
+            )}
+            {canApprove && (
+              <Button
+                size="sm"
+                disabled={loading || actionLoading}
+                onClick={() => void handleApprove()}
+              >
+                {actionLoading ? "Working…" : "Approve"}
+              </Button>
+            )}
+            {canResubmit && (
+              <Button size="sm" onClick={handleResubmit}>
+                Resubmit
+              </Button>
+            )}
             {tx && (
               <PrintInvoiceButton tx={{
                 id: tx.id,
@@ -531,7 +667,7 @@ function TransactionDetailDialog({
             </Button>
             <Button
               size="sm"
-              disabled={loading || !tx}
+              disabled={loading || !tx || !canEdit}
               onClick={() => tx && router.push(`/transactions/${tx.id}/edit`)}
             >
               Edit
@@ -539,6 +675,13 @@ function TransactionDetailDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RejectTransactionDialog
+        open={rejectOpen}
+        onOpenChange={setRejectOpen}
+        onConfirm={handleReject}
+        loading={actionLoading}
+      />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent size="sm">
@@ -570,6 +713,15 @@ function TransactionDetailDialog({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function TransactionsPage() {
+  const { user: appUser, isAdmin, loading: authLoading } = useAppUser();
+  const [wacDbEnabled, setWacDbEnabled] = useState(false);
+  const [wacCanMigrateEnv, setWacCanMigrateEnv] = useState(false);
+  const [wacDbPassword, setWacDbPassword] = useState("");
+  const [wacBackfilling, setWacBackfilling] = useState(false);
+  const [wacSetupError, setWacSetupError] = useState<string | null>(null);
+  const useDbWac = wacDbEnabled === true;
+  const { plById, currentWac, loading: wacLoading, refresh: refreshWac } = useTransactionWac(!useDbWac);
+
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [q, setQ] = useState<string>("");
@@ -577,6 +729,21 @@ export default function TransactionsPage() {
   const [amountMin, setAmountMin] = useState<string>("");
   const [amountMax, setAmountMax] = useState<string>("");
   const [type, setType] = useState<"ALL" | "BUY" | "SELL">("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  // Admin-only: show cash transactions (default hidden)
+  const [showCash, setShowCash] = useState(false);
+  const [bulkApproving, setBulkApproving] = useState(false);
+
+  // Dual stock from WAC endpoint
+  const [physicalStockGm, setPhysicalStockGm] = useState<number | null>(null);
+  const [officialStockGm, setOfficialStockGm] = useState<number | null>(null);
+
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("status");
+    if (status === "pending" || status === "approved" || status === "rejected") {
+      setStatusFilter(status);
+    }
+  }, []);
 
   // Debounce all search inputs.
   const debouncedQ = useDebounce(q, 300);
@@ -615,33 +782,38 @@ export default function TransactionsPage() {
       if (from) q = q.gte("date", from);
       if (to) q = q.lte("date", to);
       if (type !== "ALL") q = q.eq("type", type);
+      if (statusFilter !== "ALL") q = q.eq("status", statusFilter);
       if (debouncedQ.trim()) q = q.ilike("clients.name", `%${debouncedQ.trim()}%`);
       if (debouncedInvoiceQ.trim()) q = q.ilike("invoice_number", `%${debouncedInvoiceQ.trim()}%`);
       const minAmt = parseFloat(debouncedAmountMin);
       const maxAmt = parseFloat(debouncedAmountMax);
       if (!isNaN(minAmt)) q = (q as any).gte("amount_thb", minAmt);
       if (!isNaN(maxAmt)) q = (q as any).lte("amount_thb", maxAmt);
+      // Cash visibility: non-admins never see cash; admins see it only when showCash is on
+      if (!isAdmin || !showCash) q = (q as any).neq("transaction_mode", "cash");
       return q;
     },
-    [from, to, type, debouncedQ, debouncedInvoiceQ, debouncedAmountMin, debouncedAmountMax]
+    [from, to, type, statusFilter, debouncedQ, debouncedInvoiceQ, debouncedAmountMin, debouncedAmountMax, isAdmin, showCash]
   );
+
+  const wacSelect = useDbWac ? ",wac_at_sale,cost_of_sale,profit_loss,pl_percent" : "";
 
   const buildListQuery = useCallback(() => {
     const supabase = getSupabaseClient();
-    const sel = `id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,${clientRel}`;
+    const sel = `id,date,type,transaction_mode,invoice_number,weight_grams,rate_per_gram,amount_thb,status,created_by,rejection_reason${wacSelect},${clientRel}`;
     let q = supabase.from("transactions").select(sel, { count: LIST_COUNT });
     q = applyFilters(q);
     return q.order("date", { ascending: false }).order("id", { ascending: false });
-  }, [applyFilters, clientRel]);
+  }, [applyFilters, clientRel, wacSelect]);
 
   /** Full rows for CSV export (no count — avoids extra planner work per batch). */
   const buildExportQuery = useCallback(() => {
     const supabase = getSupabaseClient();
-    const sel = `id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,${clientRel}`;
+    const sel = `id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,status,created_by${wacSelect},${clientRel}`;
     let q = supabase.from("transactions").select(sel);
     q = applyFilters(q);
     return q.order("date", { ascending: false }).order("id", { ascending: false });
-  }, [applyFilters, clientRel]);
+  }, [applyFilters, clientRel, wacSelect]);
 
   /** ID-only for bulk delete (chunked). Uses inner join when client name filter is active. */
   const buildIdsQuery = useCallback(() => {
@@ -674,10 +846,82 @@ export default function TransactionsPage() {
       } else {
         setTotal(0);
       }
+    } catch (e) {
+      console.warn("Failed to load transactions:", e);
+      setRows([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   }, [buildListQuery, page]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/wac/status");
+        const body = await res.json().catch(() => ({}));
+        const ok = res.ok && body?.hasColumns === true;
+        setWacDbEnabled(ok);
+        setWacCanMigrateEnv(body?.canMigrate === true);
+      } catch {
+        setWacDbEnabled(false);
+      }
+    })();
+  }, []);
+
+  const runWacBackfill = useCallback(async (backfillOnly = false) => {
+    setWacBackfilling(true);
+    setWacSetupError(null);
+    try {
+      if (!backfillOnly) {
+        const migrateRes = await fetch("/api/wac/migrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            password: wacDbPassword.trim() || undefined,
+          }),
+        });
+        const migrateBody = await migrateRes.json().catch(() => ({}));
+        if (migrateRes.status === 503) {
+          throw new Error(
+            typeof migrateBody?.error === "string"
+              ? migrateBody.error
+              : "Enter your database password below, add SUPABASE_DB_PASSWORD to .env.local, or run the SQL in Supabase SQL Editor."
+          );
+        }
+        if (!migrateRes.ok) {
+          throw new Error(
+            typeof migrateBody?.error === "string"
+              ? migrateBody.error
+              : "Migration failed"
+          );
+        }
+      }
+
+      const res = await fetch("/api/wac/backfill", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          typeof body?.error === "string"
+            ? body.error
+            : backfillOnly
+              ? "Backfill failed — run the SQL in Supabase SQL Editor first, then retry."
+              : "Backfill failed";
+        throw new Error(msg);
+      }
+
+      const statusRes = await fetch("/api/wac/status");
+      const statusBody = await statusRes.json().catch(() => ({}));
+      setWacDbEnabled(statusRes.ok && statusBody?.hasColumns === true);
+      void refresh();
+      void refreshWac();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Setup failed";
+      setWacSetupError(message);
+    } finally {
+      setWacBackfilling(false);
+    }
+  }, [refresh, refreshWac, wacDbPassword]);
 
   const refreshStock = useCallback(async () => {
     let supabase: ReturnType<typeof getSupabaseClient>;
@@ -691,13 +935,21 @@ export default function TransactionsPage() {
       .maybeSingle();
     if (error) { console.warn(error); return; }
     setCurrentStockGrams(typeof data?.balance_grams === "number" ? data.balance_grams : 0);
+
+    // Also refresh dual-stock from WAC endpoint
+    try {
+      const res = await fetch("/api/inventory/current-wac");
+      if (res.ok) {
+        const body = await res.json();
+        if (typeof body?.physical_stock_gm === "number") setPhysicalStockGm(body.physical_stock_gm);
+        if (typeof body?.official_stock_gm === "number") setOfficialStockGm(body.official_stock_gm);
+      }
+    } catch { /* ignore */ }
   }, []);
 
   const handleBulkDelete = useCallback(async () => {
     setIsBulkDeleting(true);
     try {
-      const supabase = getSupabaseClient() as any;
-
       let ids: string[];
       if (selectAllPages) {
         const idBatchSize = 1000;
@@ -720,13 +972,12 @@ export default function TransactionsPage() {
 
       if (ids.length === 0) return;
 
-      // PostgREST rejects DELETE with no WHERE clause, so we batch by ID
-      // (chunks of 100 to stay within URL length limits).
-      const CHUNK = 100;
-      for (let i = 0; i < ids.length; i += CHUNK) {
-        const chunk = ids.slice(i, i + CHUNK);
-        await supabase.from("stock_ledger").delete().in("transaction_id", chunk);
-        await supabase.from("transactions").delete().in("id", chunk);
+      for (const id of ids) {
+        const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error ?? `Delete failed for ${id}`);
+        }
       }
 
       setSelectedIds(new Set());
@@ -740,8 +991,42 @@ export default function TransactionsPage() {
     }
   }, [selectedIds, selectAllPages, refresh, refreshStock, buildIdsQuery]);
 
+  const handleBulkApprove = useCallback(async () => {
+    const ids = selectAllPages
+      ? rows.filter((r) => r.status === "pending").map((r) => r.id)
+      : [...selectedIds].filter((id) => {
+          const row = rows.find((r) => r.id === id);
+          return row?.status === "pending";
+        });
+
+    if (ids.length === 0) return;
+    setBulkApproving(true);
+    try {
+      const res = await fetch("/api/transactions/bulk-approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Bulk approve failed");
+      setSelectedIds(new Set());
+      setSelectAllPages(false);
+      void Promise.all([refresh(), refreshStock(), refreshWac()]);
+    } catch (e) {
+      console.error("Bulk approve failed:", e);
+    } finally {
+      setBulkApproving(false);
+    }
+  }, [selectedIds, selectAllPages, rows, refresh, refreshStock, refreshWac]);
+
   // Reset page when filters change.
-  useEffect(() => { setPage(0); }, [from, to, debouncedQ, debouncedInvoiceQ, debouncedAmountMin, debouncedAmountMax, type]);
+  useEffect(() => { setPage(0); }, [from, to, debouncedQ, debouncedInvoiceQ, debouncedAmountMin, debouncedAmountMax, type, statusFilter, showCash]);
+
+  // Reload list when switching to DB-backed WAC columns.
+  useEffect(() => {
+    if (!useDbWac) return;
+    void refresh();
+  }, [useDbWac, refresh]);
 
   // On mount: load transactions + stock in parallel.
   // refreshStock is NOT in the dep array — it only fires on mount and after mutations,
@@ -801,6 +1086,10 @@ export default function TransactionsPage() {
           "Weight (g)": r.weight_grams ?? "",
           "Rate (THB/g)": r.rate_per_gram ?? "",
           "Amount (THB)": r.amount_thb ?? "",
+          "WAC at sale (฿/gm)": r.wac_at_sale ?? "",
+          "Cost of sale (฿)": r.cost_of_sale ?? "",
+          "Profit / Loss (฿)": r.profit_loss ?? "",
+          "P&L %": r.pl_percent ?? "",
           "VAT %": r.vat_percent ?? 0,
           Notes: r.notes ?? "",
           "Balance after (g)": ledgerMap.get(r.id) ?? "",
@@ -843,31 +1132,133 @@ export default function TransactionsPage() {
       title="Transactions"
       description="Filter, search, and drill into buy and sell records."
     >
+      {wacDbEnabled === false && isAdmin && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+          <p className="font-medium">WAC columns not in database yet</p>
+          <p className="mt-1 text-amber-900/90 dark:text-amber-200/90">
+            Profit/Loss is computed in the browser until DB columns exist. Paste the SQL below in{" "}
+            <a
+              href="https://supabase.com/dashboard/project/zmmoeslgjisvhuhixpau/sql/new"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              Supabase SQL Editor
+            </a>
+            , then click <strong>Backfill only</strong>. Or enter your database password below and
+            click <strong>Setup WAC</strong> (password is used once for migration, not stored).
+          </p>
+          {!wacCanMigrateEnv && (
+            <div className="mt-3 max-w-md">
+              <label htmlFor="wac-db-password" className="text-xs font-medium">
+                Database password (Supabase → Project Settings → Database)
+              </label>
+              <Input
+                id="wac-db-password"
+                type="password"
+                autoComplete="off"
+                placeholder="postgres database password"
+                className="mt-1 bg-background"
+                value={wacDbPassword}
+                onChange={(e) => setWacDbPassword(e.target.value)}
+              />
+            </div>
+          )}
+          <pre className="mt-2 max-h-32 overflow-auto rounded border bg-background/80 p-2 text-xs">{WAC_MIGRATION_SQL}</pre>
+          {wacSetupError && (
+            <p className="mt-2 text-red-700 dark:text-red-300">{wacSetupError}</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void navigator.clipboard.writeText(WAC_MIGRATION_SQL)}
+            >
+              Copy SQL
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={wacBackfilling}
+              onClick={() => void runWacBackfill(true)}
+            >
+              {wacBackfilling ? "Backfilling…" : "Backfill only (after SQL)"}
+            </Button>
+            <Button
+              size="sm"
+              disabled={wacBackfilling || (!wacCanMigrateEnv && !wacDbPassword.trim())}
+              onClick={() => void runWacBackfill(false)}
+            >
+              {wacBackfilling ? "Setting up WAC…" : "Setup WAC (migrate + backfill)"}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="sticky top-0 z-10 -mx-4 md:-mx-6 px-4 md:px-6 py-4 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <Card className="w-full">
               <CardHeader className="py-3 flex flex-row items-center justify-between space-y-0">
-                <CardTitle className="text-sm">Current Stock</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setAdjustOpen(true)}
-                >
-                  Adjust
-                </Button>
+                <CardTitle className="text-sm">Stock</CardTitle>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setAdjustOpen(true)}
+                  >
+                    Adjust
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="pb-3">
-                <div className="text-2xl font-semibold">
-                  {currentStockGrams.toLocaleString()}{" "}
-                  <span className="text-sm font-medium text-muted-foreground">grams</span>
-                </div>
+                {/* Show dual stock when available (after transaction_mode column exists) */}
+                {isAdmin && physicalStockGm !== null && officialStockGm !== null ? (
+                  <div className="flex gap-6">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Physical</div>
+                      <div className="text-xl font-semibold">
+                        {physicalStockGm.toLocaleString(undefined, { maximumFractionDigits: 3 })}{" "}
+                        <span className="text-xs font-medium text-muted-foreground">gm</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Official</div>
+                      <div className="text-xl font-semibold">
+                        {officialStockGm.toLocaleString(undefined, { maximumFractionDigits: 3 })}{" "}
+                        <span className="text-xs font-medium text-muted-foreground">gm</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-semibold">
+                    {currentStockGrams.toLocaleString()}{" "}
+                    <span className="text-sm font-medium text-muted-foreground">grams</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
             <div className="flex shrink-0 items-center gap-2">
-              {(selectedIds.size > 0 || selectAllPages) && (
+              {isAdmin && (selectedIds.size > 0 || selectAllPages) && (
+                <>
+                  <Button
+                    variant="outline"
+                    disabled={bulkApproving}
+                    onClick={() => void handleBulkApprove()}
+                  >
+                    {bulkApproving ? "Approving…" : "Approve selected"}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setBulkDeleteOpen(true)}
+                  >
+                    Delete {selectAllPages ? `all ${total}` : selectedIds.size} selected
+                  </Button>
+                </>
+              )}
+              {!isAdmin && (selectedIds.size > 0 || selectAllPages) && (
                 <Button
                   variant="destructive"
                   onClick={() => setBulkDeleteOpen(true)}
@@ -875,15 +1266,19 @@ export default function TransactionsPage() {
                   Delete {selectAllPages ? `all ${total}` : selectedIds.size} selected
                 </Button>
               )}
-              <Button variant="outline" onClick={onExport} disabled={exporting}>
-                {exporting ? "Exporting…" : "Export to CSV"}
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="/transactions/import">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import Excel
-                </Link>
-              </Button>
+              {isAdmin && (
+                <>
+                  <Button variant="outline" onClick={onExport} disabled={exporting}>
+                    {exporting ? "Exporting…" : "Export to CSV"}
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/transactions/import">
+                      <Upload className="mr-2 h-4 w-4" />
+                      Import Excel
+                    </Link>
+                  </Button>
+                </>
+              )}
               <Button asChild>
                 <Link href="/transactions/new">New Transaction</Link>
               </Button>
@@ -919,6 +1314,31 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1">
+            {(["ALL", "pending", "approved", "rejected"] as StatusFilter[]).map((s) => (
+              <Button
+                key={s}
+                size="sm"
+                variant={statusFilter === s ? "default" : "outline"}
+                className="h-8 text-xs capitalize"
+                onClick={() => setStatusFilter(s)}
+              >
+                {s === "ALL" ? "All" : s}
+              </Button>
+            ))}
+            {/* Admin-only cash toggle */}
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant={showCash ? "default" : "outline"}
+                className={cn("h-8 text-xs ml-2", showCash && "bg-zinc-600 hover:bg-zinc-700 text-white border-zinc-600")}
+                onClick={() => setShowCash((v) => !v)}
+              >
+                💰 {showCash ? "Hide cash" : "Show cash"}
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -967,17 +1387,37 @@ export default function TransactionsPage() {
               <TableHead className="w-[120px]">Date</TableHead>
               <TableHead>Client</TableHead>
               <TableHead className="w-[110px]">Type</TableHead>
+              <TableHead className="w-[120px]">Status</TableHead>
               <TableHead>Invoice #</TableHead>
               <TableHead className="text-right">Weight (g)</TableHead>
               <TableHead className="text-right">Rate (THB/g)</TableHead>
               <TableHead className="text-right">Amount (THB)</TableHead>
+              <TableHead className="text-right">WAC at sale (฿/gm)</TableHead>
+              <TableHead className="text-right">Cost of Sale (฿)</TableHead>
+              <TableHead className="text-right">Profit / Loss (฿ / %)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((r) => (
+            {rows.map((r) => {
+              const isOwnPending =
+                !isAdmin &&
+                r.status === "pending" &&
+                appUser?.id != null &&
+                r.created_by === appUser.id;
+              const showRateAlert =
+                isAdmin &&
+                r.status === "pending" &&
+                isRateDeviationAlert(r.type, r.rate_per_gram, currentWac);
+
+              return (
               <TableRow
                 key={r.id}
-                className="cursor-pointer"
+                className={cn(
+                  "cursor-pointer",
+                  r.transaction_mode === "cash"
+                    ? "bg-zinc-50/80 text-zinc-500 dark:bg-zinc-900/30 dark:text-zinc-400"
+                    : isOwnPending && "bg-amber-50/80 dark:bg-amber-950/30"
+                )}
                 onClick={() => setDetailTxId(r.id)}
               >
                 <TableCell onClick={(e) => e.stopPropagation()}>
@@ -992,7 +1432,50 @@ export default function TransactionsPage() {
                 <TableCell className="font-medium">{r.date}</TableCell>
                 <TableCell>{embeddedClientName(r.client) ?? "-"}</TableCell>
                 <TableCell>
-                  <TransactionTypeBadge type={r.type} />
+                  {r.transaction_mode === "cash" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-300 bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+                      💰 CASH
+                    </span>
+                  ) : (
+                    <TransactionTypeBadge type={r.type} />
+                  )}
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-col gap-1">
+                    <TransactionStatusBadge status={(r.status ?? "pending") as TransactionStatus} />
+                    {showRateAlert && (
+                      <span className="text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                        Rate alert
+                      </span>
+                    )}
+                    {isAdmin && r.status === "pending" && (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await fetch(`/api/transactions/${r.id}/approve`, { method: "POST" });
+                            void refresh();
+                            void refreshStock();
+                          }}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetailTxId(r.id);
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="font-mono text-xs">{r.invoice_number ?? "-"}</TableCell>
                 <TableCell className="text-right">
@@ -1004,12 +1487,18 @@ export default function TransactionsPage() {
                 <TableCell className="text-right">
                   {typeof r.amount_thb === "number" ? formatCurrency(r.amount_thb, "THB", "th-TH") : "-"}
                 </TableCell>
+                <TransactionPlCells
+                  type={r.type}
+                  pl={useDbWac ? wacPlFromRow(r) : plById.get(r.id)}
+                  loading={!useDbWac && wacLoading}
+                />
               </TableRow>
-            ))}
+            );
+            })}
 
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center">
+                <TableCell colSpan={12} className="py-10 text-center">
                   {loading ? "Loading…" : "No transactions found."}
                 </TableCell>
               </TableRow>
@@ -1046,8 +1535,21 @@ export default function TransactionsPage() {
       {/* Transaction detail dialog */}
       <TransactionDetailDialog
         txId={detailTxId}
+        wacDbEnabled={useDbWac}
+        plById={plById}
+        appUser={appUser}
+        isAdmin={isAdmin}
         onClose={() => setDetailTxId(null)}
-        onDeleted={() => { void refresh(); void refreshStock(); }}
+        onDeleted={() => {
+          void refresh();
+          void refreshStock();
+          if (!useDbWac) void refreshWac();
+        }}
+        onUpdated={() => {
+          void refresh();
+          void refreshStock();
+          if (!useDbWac) void refreshWac();
+        }}
       />
 
       {/* Bulk delete confirmation */}

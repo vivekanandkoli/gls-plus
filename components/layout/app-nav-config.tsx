@@ -6,6 +6,7 @@ import {
   BarChart3,
   FileSpreadsheet,
   FileText,
+  HandCoins,
   LayoutDashboard,
   PlusCircle,
   ScrollText,
@@ -30,10 +31,10 @@ export const PRIMARY_NAV: AppNavItem[] = [
     keywords: ["home", "overview", "kpi"],
   },
   {
-    href: "/transactions",
-    label: "Transactions",
-    icon: ArrowLeftRight,
-    keywords: ["buy", "sell", "ledger"],
+    href: "/deals",
+    label: "Deals",
+    icon: HandCoins,
+    keywords: ["buy", "sell", "trade", "transactions"],
   },
   {
     href: "/invoices",
@@ -63,10 +64,10 @@ export const PRIMARY_NAV: AppNavItem[] = [
 
 export const QUICK_ACTIONS: AppNavItem[] = [
   {
-    href: "/transactions/new",
-    label: "New transaction",
+    href: "/deals/new",
+    label: "New deal",
     icon: PlusCircle,
-    keywords: ["create", "buy", "sell"],
+    keywords: ["create", "buy", "sell", "trade"],
   },
   {
     href: "/transactions/import",

@@ -2,16 +2,20 @@ import Link from "next/link";
 import {
   ArrowRight,
   BarChart3,
+  Calculator,
+  FileText,
   LineChart,
   TrendingUp,
   Users,
   Wallet,
   Layers,
+  Banknote,
 } from "lucide-react";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
+import { getAppUser } from "@/lib/auth-server";
 
-const reportLinks = [
+const publicReportLinks = [
   {
     href: "/reports/top-buyers",
     label: "Top Clients",
@@ -63,6 +67,16 @@ const reportLinks = [
     iconColor: "text-violet-700 dark:text-violet-400",
   },
   {
+    href: "/reports/manage-pl",
+    label: "Manage P/L",
+    desc: "Import P/L workbook — per-transaction profit and overall year-end profit",
+    icon: Calculator,
+    gradient: "from-cyan-50 to-sky-50 dark:from-cyan-950/30 dark:to-sky-950/20",
+    accent: "border-l-cyan-500",
+    iconBg: "bg-cyan-100 dark:bg-cyan-900/40",
+    iconColor: "text-cyan-700 dark:text-cyan-400",
+  },
+  {
     href: "/reports/revenue",
     label: "Revenue & Margin",
     desc: "SELL revenue vs BUY cost — gross margin and monthly P&L breakdown",
@@ -72,9 +86,43 @@ const reportLinks = [
     iconBg: "bg-rose-100 dark:bg-rose-900/40",
     iconColor: "text-rose-700 dark:text-rose-400",
   },
-] as const;
+  {
+    href: "/reports/statements",
+    label: "Statements",
+    desc: "Monthly, client-wise & annual statements — export as PDF or Excel for CA",
+    icon: FileText,
+    gradient: "from-slate-50 to-zinc-50 dark:from-slate-950/30 dark:to-zinc-950/20",
+    accent: "border-l-slate-500",
+    iconBg: "bg-slate-100 dark:bg-slate-900/40",
+    iconColor: "text-slate-700 dark:text-slate-400",
+  },
+];
 
-export default function ReportsPage() {
+const adminOnlyLinks = [
+  {
+    href: "/reports/cash",
+    label: "💰 Cash Report",
+    desc: "Internal cash-only transactions — P&L, stock, and client breakdown (admin only)",
+    icon: Banknote,
+    gradient: "from-zinc-50 to-zinc-100 dark:from-zinc-950/30 dark:to-zinc-900/20",
+    accent: "border-l-zinc-400",
+    iconBg: "bg-zinc-100 dark:bg-zinc-900/40",
+    iconColor: "text-zinc-600 dark:text-zinc-400",
+  },
+];
+
+export default async function ReportsPage() {
+  // Check if user is admin to conditionally show admin-only links
+  let isAdmin = false;
+  try {
+    const user = await getAppUser();
+    isAdmin = user?.role === "admin";
+  } catch {
+    // non-fatal; just don't show admin links
+  }
+
+  const allLinks = isAdmin ? [...publicReportLinks, ...adminOnlyLinks] : publicReportLinks;
+
   return (
     <PageWrapper
       title="Reports"
@@ -84,7 +132,7 @@ export default function ReportsPage() {
         Choose a report to drill into performance, trends, and client insights.
       </p>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {reportLinks.map((r) => {
+        {allLinks.map((r) => {
           const Icon = r.icon;
           return (
             <Link key={r.href} href={r.href} className="group block">

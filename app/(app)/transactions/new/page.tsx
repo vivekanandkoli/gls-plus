@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
+import { SellPlPreviewCard } from "@/components/transactions/TransactionPlDisplay";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -40,12 +41,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getSupabaseClient } from "@/lib/supabase";
+import { useCurrentWac } from "@/hooks/use-current-wac";
+import { useAppUser } from "@/hooks/use-app-user";
 
 type TxType = "BUY" | "SELL";
+type TxMode = "official" | "cash";
 type ClientRow = { id: string; name: string };
 
 const schema = z.object({
   type: z.enum(["BUY", "SELL"]),
+  mode: z.enum(["official", "cash"]).default("official"),
   date: z.date(),
   clientId: z.string().min(1, "Client is required"),
   weightGrams: z.coerce.number().gt(0, "Weight must be > 0"),
@@ -64,8 +69,26 @@ function yymmdd(d: Date) {
   return format(d, "yyMMdd");
 }
 
-async function generateInvoiceNumber(type: TxType, date: Date) {
+function yyyymmdd(d: Date) {
+  return format(d, "yyyyMMdd");
+}
+
+async function generateInvoiceNumber(type: TxType, date: Date, mode: TxMode = "official") {
   const supabase = getSupabaseClient() as any;
+
+  if (mode === "cash") {
+    // Auto-generate CASH-YYYYMMDD-001 format
+    const day = yyyymmdd(date);
+    const prefix = `CASH-${day}-`;
+    const like = `${prefix}%`;
+    const { count } = await supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .ilike("invoice_number", like);
+    const seq = ((count as number) ?? 0) + 1;
+    return `${prefix}${pad3(seq)}`;
+  }
+
   const prefix = type === "BUY" ? "IV" : "UP";
   const day = yymmdd(date);
   const like = `${prefix}${day}%`;
@@ -83,6 +106,8 @@ async function generateInvoiceNumber(type: TxType, date: Date) {
 
 export default function NewTransactionPage() {
   const router = useRouter();
+  const { user: appUser, isAdmin } = useAppUser();
+  const { currentWac, stockGm, loading: wacLoading } = useCurrentWac();
 
   const [clientsOpen, setClientsOpen] = useState(false);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -103,6 +128,7 @@ export default function NewTransactionPage() {
     resolver: zodResolver(schema) as any,
     defaultValues: {
       type: "BUY",
+      mode: "official",
       date: new Date(),
       clientId: "",
       weightGrams: 0,
@@ -114,10 +140,12 @@ export default function NewTransactionPage() {
   });
 
   const type = form.watch("type");
+  const mode = form.watch("mode") as TxMode;
   const date = form.watch("date");
   const weight = form.watch("weightGrams");
   const rate = form.watch("ratePerGram");
   const vat = form.watch("vatPercent");
+  const isCash = mode === "cash";
 
   // Preview auto-generated invoice number and check for duplicates.
   useEffect(() => {
@@ -125,10 +153,11 @@ export default function NewTransactionPage() {
     let cancelled = false;
     const timer = setTimeout(async () => {
       try {
-        const preview = await generateInvoiceNumber(type, date);
+        const preview = await generateInvoiceNumber(type, date, mode);
         if (cancelled) return;
         setPreviewInvoice(preview);
-        // Check if this exact number already exists.
+        // Cash invoices are auto-generated and always unique; skip duplicate check.
+        if (mode === "cash") { setInvoiceDuplicate(false); return; }
         const supabase = getSupabaseClient() as any;
         const { count } = await supabase
           .from("transactions")
@@ -138,7 +167,7 @@ export default function NewTransactionPage() {
       } catch { /* ignore */ }
     }, 400);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [type, date]);
+  }, [type, date, mode]);
 
   const amount = useMemo(() => {
     const w = Number.isFinite(weight) ? weight : 0;
@@ -208,55 +237,32 @@ export default function NewTransactionPage() {
   async function submitNow(values: FormValues) {
     setSubmitting(true);
     try {
-      const supabase = getSupabaseClient() as any;
-
-      const invoiceNumber = await generateInvoiceNumber(values.type, values.date);
+      const txMode = (values.mode ?? "official") as TxMode;
+      const invoiceNumber = await generateInvoiceNumber(values.type, values.date, txMode);
       const dateIso = format(values.date, "yyyy-MM-dd");
-      const amountThb = values.weightGrams * values.ratePerGram;
 
-      const { data: insertedTx, error: txErr } = await supabase
-        .from("transactions")
-        .insert({
-          client_id: values.clientId,
+      const res = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: values.clientId,
           type: values.type,
           date: dateIso,
-          invoice_number: invoiceNumber,
-          weight_grams: values.weightGrams,
-          rate_per_gram: values.ratePerGram,
-          amount_thb: amountThb,
-          vat_percent: values.vatPercent,
+          invoiceNumber,
+          weightGrams: values.weightGrams,
+          ratePerGram: values.ratePerGram,
+          vatPercent: values.vatPercent,
           notes: values.notes?.trim() || null,
-        })
-        .select("id, client_id")
-        .single();
-      if (txErr) throw txErr;
-
-      const delta = values.type === "BUY" ? values.weightGrams : -values.weightGrams;
-
-      const { data: lastLedger, error: lastErr } = await supabase
-        .from("stock_ledger")
-        .select("balance_grams")
-        .order("recorded_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (lastErr) throw lastErr;
-
-      const prevBal =
-        typeof lastLedger?.balance_grams === "number"
-          ? (lastLedger.balance_grams as number)
-          : 0;
-      const newBal = prevBal + delta;
-
-      const { error: ledErr } = await supabase.from("stock_ledger").insert({
-        client_id: insertedTx.client_id,
-        transaction_id: insertedTx.id,
-        date: dateIso,
-        delta_grams: delta,
-        balance_grams: newBal,
+          transactionMode: txMode,
+        }),
       });
-      if (ledErr) throw ledErr;
 
-      router.push(`/transactions/${insertedTx.id}`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Create failed");
+      }
+
+      router.push(`/transactions/${data.transaction.id}`);
     } finally {
       setSubmitting(false);
       setConfirmOpen(false);
@@ -271,10 +277,22 @@ export default function NewTransactionPage() {
     >
       <div
         className={cn(
-          "rounded-lg border bg-card p-6 text-card-foreground",
-          type === "BUY" ? "border-emerald-200" : "border-amber-200"
+          "rounded-lg border bg-card p-6 text-card-foreground transition-colors",
+          isCash
+            ? "border-dashed border-zinc-400 bg-zinc-50 dark:bg-zinc-900/30"
+            : type === "BUY"
+            ? "border-emerald-200"
+            : "border-amber-200"
         )}
       >
+        {/* Cash mode banner */}
+        {isCash && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+            <span className="text-base">💰</span>
+            <span>This transaction will <strong>not</strong> appear in official statements or CA reports.</span>
+          </div>
+        )}
+
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit((values) => {
@@ -283,6 +301,51 @@ export default function NewTransactionPage() {
             })}
             className="space-y-6"
           >
+            {/* Cash / Official mode toggle — admin only */}
+            {isAdmin && (
+              <FormField
+                control={form.control}
+                name="mode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs text-muted-foreground">Transaction Mode (Admin)</FormLabel>
+                    <FormControl>
+                      <ToggleGroup
+                        type="single"
+                        value={field.value}
+                        onValueChange={(v) => v && field.onChange(v)}
+                        className="grid grid-cols-2 max-w-xs"
+                      >
+                        <ToggleGroupItem
+                          value="official"
+                          className={cn(
+                            "py-2 text-sm font-medium",
+                            field.value === "official"
+                              ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                              : "border"
+                          )}
+                        >
+                          Official
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                          value="cash"
+                          className={cn(
+                            "py-2 text-sm font-medium",
+                            field.value === "cash"
+                              ? "bg-zinc-600 text-white hover:bg-zinc-600"
+                              : "border"
+                          )}
+                        >
+                          💰 Cash
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <FormField
               control={form.control}
               name="type"
@@ -469,6 +532,16 @@ export default function NewTransactionPage() {
               </FormItem>
             </div>
 
+            {type === "SELL" && (
+              <SellPlPreviewCard
+                weightGrams={Number.isFinite(weight) ? weight : 0}
+                ratePerGram={Number.isFinite(rate) ? rate : 0}
+                currentWac={currentWac}
+                stockGm={stockGm}
+                loading={wacLoading}
+              />
+            )}
+
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -512,13 +585,18 @@ export default function NewTransactionPage() {
             {previewInvoice && (
               <div className={cn(
                 "flex items-center gap-2 rounded-md border px-3 py-2 text-xs",
-                invoiceDuplicate
+                isCash
+                  ? "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                  : invoiceDuplicate
                   ? "border-amber-300 bg-amber-50 text-amber-800"
                   : "border-emerald-200 bg-emerald-50 text-emerald-800"
               )}>
                 <span className="font-medium">Invoice #:</span>
                 <span className="font-mono">{previewInvoice}</span>
-                {invoiceDuplicate && (
+                {isCash && (
+                  <span className="ml-1 text-zinc-500">(auto-generated)</span>
+                )}
+                {!isCash && invoiceDuplicate && (
                   <span className="ml-1 font-semibold text-amber-700">
                     ⚠ This invoice number already exists — a new sequence number will be generated on save.
                   </span>

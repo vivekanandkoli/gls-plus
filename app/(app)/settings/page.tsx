@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getSupabaseClient } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+import { useAppUser } from "@/hooks/use-app-user";
 
 const schema = z.object({
   company_name_th: z.string().optional(),
@@ -46,6 +47,10 @@ const schema = z.object({
   sell_invoice_prefix: z.string().min(1),
   invoice_footer_note: z.string().optional(),
   low_stock_threshold_grams: z.coerce.number().min(0),
+
+  // Financial / P&L settings
+  opening_stock_value_thb: z.coerce.number().min(0),
+  closing_rate_owner: z.coerce.number().min(0),
 });
 
 type Values = z.output<typeof schema>;
@@ -119,6 +124,7 @@ function PreviewInvoiceFooter({ v }: { v: Values }) {
 }
 
 export default function SettingsPage() {
+  const { isAdmin } = useAppUser();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string>("");
@@ -153,6 +159,8 @@ export default function SettingsPage() {
       buy_invoice_prefix: "IV",
       sell_invoice_prefix: "UP",
       low_stock_threshold_grams: 0,
+      opening_stock_value_thb: 6665493.2,
+      closing_rate_owner: 4260,
       invoice_footer_note:
         "Note: This receipt will be valid only with authorised signature and bill collector's signature.\nIf payment is made by cheque, this receipt is invalid until cheque is cleared.",
     },
@@ -186,6 +194,8 @@ export default function SettingsPage() {
             buy_invoice_prefix: data.buy_invoice_prefix ?? "IV",
             sell_invoice_prefix: data.sell_invoice_prefix ?? "UP",
             low_stock_threshold_grams: data.low_stock_threshold_grams ?? 0,
+            opening_stock_value_thb: data.opening_stock_value_thb ?? 6665493.2,
+            closing_rate_owner: data.closing_rate_owner ?? 4260,
             invoice_footer_note: data.invoice_footer_note ?? "",
           });
         }
@@ -496,6 +506,56 @@ export default function SettingsPage() {
                 />
               </div>
 
+              {isAdmin && (
+              <div>
+                <div className="mb-3 text-sm font-semibold">Financial Settings</div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="opening_stock_value_thb"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Opening stock value (฿)</FormLabel>
+                        <FormControl>
+                          <Input
+                            inputMode="decimal"
+                            value={String(field.value ?? 6665493.2)}
+                            onChange={(e) => field.onChange(e.target.value)}
+                          />
+                        </FormControl>
+                        <div className="text-xs text-muted-foreground">
+                          Total THB value of gold stock at the start of the accounting period.
+                          Default: ฿6,665,493.20
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="closing_rate_owner"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Year-end closing rate (฿/gm)</FormLabel>
+                        <FormControl>
+                          <Input
+                            inputMode="decimal"
+                            value={String(field.value ?? 4260)}
+                            onChange={(e) => field.onChange(e.target.value)}
+                          />
+                        </FormControl>
+                        <div className="text-xs text-muted-foreground">
+                          Used for the Owner&apos;s method P&amp;L (Official closing value). 
+                          Update each year-end with the actual market closing rate.
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+              )}
+
               <div>
                 <div className="mb-3 text-sm font-semibold">Invoice Settings</div>
 
@@ -649,7 +709,26 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Admin: users & transaction activity */}
+      {isAdmin ? (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-sm">Administration</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild>
+              <a href="/settings/users">Manage users →</a>
+            </Button>
+            <Button variant="outline" asChild>
+              <a href="/settings/activity-log">Transaction activity log →</a>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Rebuild Ledger */}
+      {isAdmin ? (
+      <>
       <Card className="mt-6 border-destructive/40">
         <CardHeader>
           <CardTitle className="text-sm">Rebuild Stock Ledger</CardTitle>
@@ -707,6 +786,8 @@ export default function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </>
+      ) : null}
     </PageWrapper>
   );
 }

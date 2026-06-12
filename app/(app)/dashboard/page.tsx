@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAppUser, usePendingCount } from "@/hooks/use-app-user";
 import {
   Table,
   TableBody,
@@ -70,8 +71,27 @@ function addMonths(d: Date, months: number) {
 
 type Period = "all" | "month";
 
+/** Format ISO date string (YYYY-MM-DD) to short display like "Jan 15". */
+function formatLedgerDate(dateStr: string): string {
+  if (!dateStr || dateStr.startsWith("row-")) return dateStr;
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+/** Format month key "YYYY-MM" to short display like "Jun '25". */
+function formatMonthKey(key: string): string {
+  const parts = key.split("-");
+  if (parts.length !== 2) return key;
+  const m = SHORT_MONTHS[parseInt(parts[1], 10) - 1];
+  const y = parts[0].slice(2);
+  return m ? `${m} '${y}` : key;
+}
+
 const KPI_GRID =
-  "grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7";
+  "grid gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-7";
 
 /** Recharts tooltip — readable contrast on light/dark (ui-ux-pro-max). */
 const chartTooltipStyle: CSSProperties = {
@@ -89,10 +109,19 @@ const chartTooltipLabelStyle: CSSProperties = {
 };
 
 export default function DashboardPage() {
+  const { user, isAdmin } = useAppUser();
+  const { count: pendingApprovalCount } = usePendingCount(isAdmin);
+  const [myWorkflow, setMyWorkflow] = useState({
+    monthCount: 0,
+    pending: 0,
+    rejected: 0,
+  });
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [period, setPeriod] = useState<Period>("month");
   const [lowStockThreshold, setLowStockThreshold] = useState<number>(0);
+  const [physicalStockGm, setPhysicalStockGm] = useState<number | null>(null);
+  const [officialStockGm, setOfficialStockGm] = useState<number | null>(null);
   const [kpis, setKpis] = useState({
     currentStockGrams: 0,
     buyAllGrams: 0,
@@ -103,9 +132,21 @@ export default function DashboardPage() {
     buyMonthThb: 0,
     sellMonthGrams: 0,
     sellMonthThb: 0,
-    avgBuyRateToday: 0,
-    avgSellRateToday: 0,
+    // Period-weighted avg rates (all-time and month)
+    avgBuyRateAll: 0,
+    avgSellRateAll: 0,
+    avgBuyRateMonth: 0,
+    avgSellRateMonth: 0,
     totalClients: 0,
+    // 3-way P&L (official / cash / combined)
+    officialBuyAllThb: 0,
+    officialSellAllThb: 0,
+    cashBuyAllThb: 0,
+    cashSellAllThb: 0,
+    officialBuyMonthThb: 0,
+    officialSellMonthThb: 0,
+    cashBuyMonthThb: 0,
+    cashSellMonthThb: 0,
   });
 
   const [ledger90d, setLedger90d] = useState<LedgerPoint[]>([]);
@@ -113,6 +154,25 @@ export default function DashboardPage() {
     { month: string; buy_grams: number; sell_grams: number }[]
   >([]);
   const [recentTx, setRecentTx] = useState<TxRow[]>([]);
+
+  type ProfitSummary = {
+    trading_profit: { value: number; label: string; note: string };
+    tax_profit: {
+      value: number;
+      label: string;
+      note: string;
+      formula: {
+        total_sell: number;
+        total_buy: number;
+        owner_closing_rate: number;
+        closing_value_owner: number;
+      };
+    };
+    current_stock_gm: number;
+    current_wac: number;
+    closing_rate_owner: number;
+  };
+  const [profitSummary, setProfitSummary] = useState<ProfitSummary | null>(null);
 
   const supabaseConfigError = useMemo(() => getSupabaseBrowserConfigError(), []);
   const canQuery = supabaseConfigError === null;
@@ -156,33 +216,39 @@ export default function DashboardPage() {
           // 2) All-time buy/sell totals
           supabase
             .from("transactions")
-            .select("type,weight_grams,amount_thb")
+            .select("type,weight_grams,amount_thb,transaction_mode")
+            .eq("status", "approved")
             .limit(10000),
           // 3) This-month buy/sell totals
           supabase
             .from("transactions")
-            .select("type,weight_grams,amount_thb")
+            .select("type,weight_grams,amount_thb,transaction_mode")
+            .eq("status", "approved")
             .gte("date", monthStart)
             .lte("date", today),
           // 4) Today avg rates
           supabase
             .from("transactions")
             .select("type,rate_per_gram")
+            .eq("status", "approved")
             .eq("date", today),
           // 5) Total clients
           supabase
             .from("clients")
             .select("id", { count: "exact", head: true }),
-          // 6) Ledger 90d for chart
+          // 6) Ledger for chart — use same 24-month window as monthly volume
+          //    so historical (2025) data always appears.
           supabase
             .from("stock_ledger")
-            .select("date,balance_grams")
-            .gte("date", d90)
-            .order("date", { ascending: true }),
+            .select("recorded_at,balance_grams")
+            .gte("recorded_at", windowStart)
+            .order("recorded_at", { ascending: true })
+            .limit(500),
           // 7) Monthly volume (last 24 months)
           supabase
             .from("transactions")
             .select("date,type,weight_grams")
+            .eq("status", "approved")
             .gte("date", windowStart)
             .lte("date", today),
           // 8) Recent transactions
@@ -228,55 +294,71 @@ export default function DashboardPage() {
 
         // Compute all-time buy/sell totals.
         let buyAllGrams = 0, buyAllThb = 0, sellAllGrams = 0, sellAllThb = 0;
+        let officialBuyAllThb = 0, officialSellAllThb = 0;
+        let cashBuyAllThb = 0, cashSellAllThb = 0;
         for (const r of allTx) {
           const w = typeof r.weight_grams === "number" ? r.weight_grams : 0;
           const a = typeof r.amount_thb === "number" ? r.amount_thb : 0;
-          if (r.type === "BUY") { buyAllGrams += w; buyAllThb += a; }
-          else if (r.type === "SELL") { sellAllGrams += w; sellAllThb += a; }
+          const isCash = r.transaction_mode === "cash";
+          if (r.type === "BUY") {
+            buyAllGrams += w; buyAllThb += a;
+            if (isCash) cashBuyAllThb += a; else officialBuyAllThb += a;
+          } else if (r.type === "SELL") {
+            sellAllGrams += w; sellAllThb += a;
+            if (isCash) cashSellAllThb += a; else officialSellAllThb += a;
+          }
         }
 
         // Compute this-month buy/sell totals.
         let buyMonthGrams = 0, buyMonthThb = 0, sellMonthGrams = 0, sellMonthThb = 0;
+        let officialBuyMonthThb = 0, officialSellMonthThb = 0;
+        let cashBuyMonthThb = 0, cashSellMonthThb = 0;
         for (const r of monthTx) {
           const w = typeof r.weight_grams === "number" ? r.weight_grams : 0;
           const a = typeof r.amount_thb === "number" ? r.amount_thb : 0;
-          if (r.type === "BUY") { buyMonthGrams += w; buyMonthThb += a; }
-          else if (r.type === "SELL") { sellMonthGrams += w; sellMonthThb += a; }
+          const isCash = r.transaction_mode === "cash";
+          if (r.type === "BUY") {
+            buyMonthGrams += w; buyMonthThb += a;
+            if (isCash) cashBuyMonthThb += a; else officialBuyMonthThb += a;
+          } else if (r.type === "SELL") {
+            sellMonthGrams += w; sellMonthThb += a;
+            if (isCash) cashSellMonthThb += a; else officialSellMonthThb += a;
+          }
         }
 
-        // Today avg rates.
-        let buyRateSum = 0, buyRateCount = 0, sellRateSum = 0, sellRateCount = 0;
-        for (const r of todayTx) {
-          const rate = typeof r.rate_per_gram === "number" ? r.rate_per_gram : null;
-          if (rate === null) continue;
-          if (r.type === "BUY") { buyRateSum += rate; buyRateCount += 1; }
-          else if (r.type === "SELL") { sellRateSum += rate; sellRateCount += 1; }
-        }
+        // Period-weighted avg rates — computed from weight × rate aggregates.
+        // Falls back gracefully: month avg when period=month, all-time when period=all.
+        // todayTx is kept for backward compat (not used in display anymore).
+        void todayTx; // retained in parallel fetch for future use
 
-        // Ledger chart data — fallback to id-sorted if date column is missing.
-        let ledgerRows: { date?: string; id?: string; balance_grams?: number }[] = [];
+        // Dual-stock: physical (all txns) vs official (official-mode only)
+        try {
+          const res = await fetch("/api/inventory/current-wac");
+          if (res.ok) {
+            const body = await res.json();
+            if (typeof body?.physical_stock_gm === "number") setPhysicalStockGm(body.physical_stock_gm);
+            if (typeof body?.official_stock_gm === "number") setOfficialStockGm(body.official_stock_gm);
+          }
+        } catch { /* ignore — dual stock is optional */ }
+
+        // Ledger chart data — map recorded_at → date string (YYYY-MM-DD).
+        let ledgerRows: { recorded_at?: string; balance_grams?: number }[] = [];
         if (ledgerResult.error) {
-          const { data: ledgerPlain, error: ledErr2 } = await supabase
-            .from("stock_ledger")
-            .select("id,balance_grams")
-            .order("id", { ascending: true })
-            .limit(2000);
-          if (ledErr2) throw ledErr2;
-          ledgerRows = (ledgerPlain ?? []).map(
-            (r: { id: string; balance_grams: number }, i: number) => ({
-              date: `row-${i + 1}`,
-              balance_grams: r.balance_grams,
-            })
-          );
+          console.warn("Ledger query error:", ledgerResult.error.message);
         } else {
           ledgerRows = ledgerResult.data ?? [];
         }
 
         const ledgerPoints: LedgerPoint[] = (ledgerRows ?? [])
-          .map((r: any) => ({
-            date: String(r.date ?? r.id ?? ""),
-            balance_grams: typeof r.balance_grams === "number" ? r.balance_grams : 0,
-          }))
+          .map((r: any) => {
+            // recorded_at may be a full ISO timestamp or a date string — take first 10 chars.
+            const raw: string = String(r.recorded_at ?? "");
+            const dateStr = raw.length >= 10 ? raw.slice(0, 10) : raw;
+            return {
+              date: dateStr,
+              balance_grams: typeof r.balance_grams === "number" ? r.balance_grams : 0,
+            };
+          })
           .reduce((acc: LedgerPoint[], cur: LedgerPoint) => {
             const last = acc[acc.length - 1];
             if (last?.date === cur.date) { acc[acc.length - 1] = cur; } else { acc.push(cur); }
@@ -311,13 +393,32 @@ export default function DashboardPage() {
           buyMonthThb,
           sellMonthGrams,
           sellMonthThb,
-          avgBuyRateToday: buyRateCount ? buyRateSum / buyRateCount : 0,
-          avgSellRateToday: sellRateCount ? sellRateSum / sellRateCount : 0,
+          avgBuyRateAll: buyAllGrams > 0 ? buyAllThb / buyAllGrams : 0,
+          avgSellRateAll: sellAllGrams > 0 ? sellAllThb / sellAllGrams : 0,
+          avgBuyRateMonth: buyMonthGrams > 0 ? buyMonthThb / buyMonthGrams : 0,
+          avgSellRateMonth: sellMonthGrams > 0 ? sellMonthThb / sellMonthGrams : 0,
           totalClients: clientCount ?? 0,
+          officialBuyAllThb,
+          officialSellAllThb,
+          cashBuyAllThb,
+          cashSellAllThb,
+          officialBuyMonthThb,
+          officialSellMonthThb,
+          cashBuyMonthThb,
+          cashSellMonthThb,
         });
         setLedger90d(ledgerPoints);
         setMonthlyVolume(vol);
         setRecentTx((recent ?? []) as unknown as TxRow[]);
+
+        // Profit summary (owner's + WAC method) — non-blocking.
+        try {
+          const psRes = await fetch("/api/dashboard/profit-summary");
+          if (psRes.ok) {
+            const ps = await psRes.json();
+            if (ps?.trading_profit) setProfitSummary(ps);
+          }
+        } catch { /* ignore — P&L card degrades gracefully */ }
       } catch (e) {
         console.error(e);
         setLoadError(formatSupabaseQueryError(e));
@@ -329,12 +430,67 @@ export default function DashboardPage() {
     void run();
   }, [canQuery]);
 
+  useEffect(() => {
+    if (!canQuery || isAdmin || !user?.id) return;
+
+    const run = async () => {
+      try {
+        const supabase = getSupabaseClient() as any;
+        const now = new Date();
+        const monthStart = isoDate(startOfMonth(now));
+        const today = isoDate(now);
+
+        const [monthRes, pendingRes, rejectedRes] = await Promise.all([
+          supabase
+            .from("transactions")
+            .select("id", { count: "exact", head: true })
+            .eq("created_by", user.id)
+            .gte("date", monthStart)
+            .lte("date", today),
+          supabase
+            .from("transactions")
+            .select("id", { count: "exact", head: true })
+            .eq("created_by", user.id)
+            .eq("status", "pending"),
+          supabase
+            .from("transactions")
+            .select("id", { count: "exact", head: true })
+            .eq("created_by", user.id)
+            .eq("status", "rejected"),
+        ]);
+
+        setMyWorkflow({
+          monthCount: monthRes.count ?? 0,
+          pending: pendingRes.count ?? 0,
+          rejected: rejectedRes.count ?? 0,
+        });
+      } catch (e) {
+        console.warn("Failed to load user workflow stats", e);
+      }
+    };
+
+    void run();
+  }, [canQuery, isAdmin, user?.id]);
+
   const showGrams = period === "month" ? kpis.buyMonthGrams : kpis.buyAllGrams;
   const showBuyThb = period === "month" ? kpis.buyMonthThb : kpis.buyAllThb;
   const showSellGrams = period === "month" ? kpis.sellMonthGrams : kpis.sellAllGrams;
   const showSellThb = period === "month" ? kpis.sellMonthThb : kpis.sellAllThb;
   const grossMargin = showSellThb - showBuyThb;
   const marginPct = showSellThb > 0 ? (grossMargin / showSellThb) * 100 : 0;
+
+  // Period avg rates — weighted by volume (not simple avg of daily rates)
+  const displayBuyRate = period === "month" ? kpis.avgBuyRateMonth : kpis.avgBuyRateAll;
+  const displaySellRate = period === "month" ? kpis.avgSellRateMonth : kpis.avgSellRateAll;
+
+  // 3-way P&L figures (admin only)
+  const officialBuyThb = period === "month" ? kpis.officialBuyMonthThb : kpis.officialBuyAllThb;
+  const officialSellThb = period === "month" ? kpis.officialSellMonthThb : kpis.officialSellAllThb;
+  const cashBuyThb = period === "month" ? kpis.cashBuyMonthThb : kpis.cashBuyAllThb;
+  const cashSellThb = period === "month" ? kpis.cashSellMonthThb : kpis.cashSellAllThb;
+  const officialPl = officialSellThb - officialBuyThb;
+  const cashPl = cashSellThb - cashBuyThb;
+  const combinedPl = officialPl + cashPl;
   const isLowStock =
     lowStockThreshold > 0 && kpis.currentStockGrams < lowStockThreshold;
 
@@ -362,6 +518,51 @@ export default function DashboardPage() {
           <strong className="font-semibold">Low stock warning:</strong> Current balance is{" "}
           <span className="font-semibold">{kpis.currentStockGrams.toLocaleString()} g</span>, below
           your threshold of {lowStockThreshold.toLocaleString()} g.
+        </div>
+      ) : null}
+
+      {isAdmin && pendingApprovalCount > 0 ? (
+        <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+          <strong className="font-semibold">{pendingApprovalCount} pending approval</strong>
+          {pendingApprovalCount === 1 ? "" : "s"} need review.{" "}
+          <Link href="/transactions?status=pending" className="font-medium underline underline-offset-2">
+            Review pending transactions →
+          </Link>
+        </div>
+      ) : null}
+
+      {!isAdmin && user ? (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                My transactions this month
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pb-3 pt-0 text-2xl font-semibold tabular-nums">
+              {myWorkflow.monthCount}
+            </CardContent>
+          </Card>
+          <Card className={myWorkflow.pending > 0 ? "border-amber-500/40 bg-amber-500/5" : undefined}>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Pending approval
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pb-3 pt-0 text-2xl font-semibold tabular-nums">
+              {myWorkflow.pending}
+            </CardContent>
+          </Card>
+          <Card className={myWorkflow.rejected > 0 ? "border-destructive/40 bg-destructive/5" : undefined}>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Rejected (needs fix)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pb-3 pt-0 text-2xl font-semibold tabular-nums">
+              {myWorkflow.rejected}
+            </CardContent>
+          </Card>
         </div>
       ) : null}
 
@@ -418,121 +619,182 @@ export default function DashboardPage() {
       ) : (
       <div className={KPI_GRID}>
         <Card className="lg:col-span-1 min-w-0">
-          <CardHeader className="py-4">
-            <CardTitle className="text-sm">Current Stock Balance</CardTitle>
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm">Current Stock</CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
+          <CardContent className="pb-3">
             <div
-              className={cn("text-2xl font-semibold tabular-nums", isLowStock && "text-amber-600")}
+              className={cn("text-xl font-semibold tabular-nums", isLowStock && "text-amber-600")}
               aria-label={`Current stock ${kpis.currentStockGrams.toLocaleString()} grams`}
             >
               {kpis.currentStockGrams.toLocaleString()}
             </div>
             <div className="text-xs text-muted-foreground">grams</div>
+            {isAdmin && physicalStockGm !== null && officialStockGm !== null && (
+              <div className="mt-1.5 space-y-0.5 border-t pt-1.5 text-[11px] text-muted-foreground">
+                <div className="flex justify-between gap-1">
+                  <span className="shrink-0">Physical</span>
+                  <span className="font-medium tabular-nums text-foreground truncate">
+                    {physicalStockGm.toLocaleString(undefined, { maximumFractionDigits: 2 })} gm
+                  </span>
+                </div>
+                <div className="flex justify-between gap-1">
+                  <span className="shrink-0">Official</span>
+                  <span className="font-medium tabular-nums text-foreground truncate">
+                    {officialStockGm.toLocaleString(undefined, { maximumFractionDigits: 2 })} gm
+                  </span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-1 min-w-0">
-          <CardHeader className="py-4 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
+          <CardHeader className="py-3">
+            <div className="flex items-center gap-1.5">
               <TransactionTypeBadge type="BUY">Buy</TransactionTypeBadge>
-              <CardTitle className="text-sm leading-tight">
-                {period === "month" ? "Purchases · this month" : "Purchases · all time"}
+              <CardTitle className="text-xs text-muted-foreground font-normal truncate">
+                {period === "month" ? "this month" : "all time"}
               </CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="pb-4">
+          <CardContent className="pb-3">
             <div
-              className="text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400"
+              className="text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400 truncate"
               aria-label={`Buy volume ${showGrams.toLocaleString()} grams, ${formatCurrency(showBuyThb, "THB", "th-TH")}`}
             >
               {showGrams.toLocaleString()}g
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground truncate">
               {formatCurrency(showBuyThb, "THB", "th-TH")}
             </div>
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-1 min-w-0">
-          <CardHeader className="py-4 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
+          <CardHeader className="py-3">
+            <div className="flex items-center gap-1.5">
               <TransactionTypeBadge type="SELL">Sell</TransactionTypeBadge>
-              <CardTitle className="text-sm leading-tight">
-                {period === "month" ? "Sales · this month" : "Sales · all time"}
+              <CardTitle className="text-xs text-muted-foreground font-normal truncate">
+                {period === "month" ? "this month" : "all time"}
               </CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="pb-4">
+          <CardContent className="pb-3">
             <div
-              className="text-2xl font-semibold tabular-nums text-amber-700 dark:text-amber-400"
+              className="text-xl font-semibold tabular-nums text-amber-700 dark:text-amber-400 truncate"
               aria-label={`Sell volume ${showSellGrams.toLocaleString()} grams, ${formatCurrency(showSellThb, "THB", "th-TH")}`}
             >
               {showSellGrams.toLocaleString()}g
             </div>
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground truncate">
               {formatCurrency(showSellThb, "THB", "th-TH")}
             </div>
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-1 min-w-0">
-          <CardHeader className="py-4">
-            <CardTitle className="text-sm">Avg Buy Rate today</CardTitle>
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm">Avg Buy Rate</CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-2xl font-semibold tabular-nums">
-              {kpis.avgBuyRateToday ? kpis.avgBuyRateToday.toFixed(2) : "—"}
+          <CardContent className="pb-3">
+            <div className="text-xl font-semibold tabular-nums">
+              {displayBuyRate ? displayBuyRate.toFixed(2) : "—"}
             </div>
-            <div className="text-xs text-muted-foreground">THB/g</div>
+            <div className="text-xs text-muted-foreground">
+              THB/g · {period === "month" ? "this month" : "all time"}
+            </div>
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-1 min-w-0">
-          <CardHeader className="py-4">
-            <CardTitle className="text-sm">Avg Sell Rate today</CardTitle>
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm">Avg Sell Rate</CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-2xl font-semibold tabular-nums">
-              {kpis.avgSellRateToday ? kpis.avgSellRateToday.toFixed(2) : "—"}
+          <CardContent className="pb-3">
+            <div className="text-xl font-semibold tabular-nums">
+              {displaySellRate ? displaySellRate.toFixed(2) : "—"}
             </div>
-            <div className="text-xs text-muted-foreground">THB/g</div>
+            <div className="text-xs text-muted-foreground">
+              THB/g · {period === "month" ? "this month" : "all time"}
+            </div>
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-1 min-w-0">
-          <CardHeader className="py-4">
+          <CardHeader className="py-3">
             <CardTitle className="text-sm">Total Clients</CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
-            <div className="text-2xl font-semibold tabular-nums">
+          <CardContent className="pb-3">
+            <div className="text-xl font-semibold tabular-nums">
               {kpis.totalClients.toLocaleString()}
             </div>
             <div className="text-xs text-muted-foreground">clients</div>
           </CardContent>
         </Card>
 
+        {/* NET PROFIT card — admin sees Trading Profit + Tax Profit */}
+        {isAdmin ? (
+          <Card className="lg:col-span-1 min-w-0">
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm">Net Profit</CardTitle>
+            </CardHeader>
+            <CardContent className="pb-3 space-y-2">
+              {profitSummary ? (
+                <>
+                  {/* Trading Profit (Private) — primary */}
+                  <div>
+                    <div className={cn(
+                      "text-xl font-bold tabular-nums leading-tight",
+                      profitSummary.trading_profit.value >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600"
+                    )}>
+                      {formatCurrency(profitSummary.trading_profit.value, "THB", "th-TH")}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground leading-tight font-medium">
+                      Trading Profit (Private)
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      All deals · cash + non-cash
+                    </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Tax Profit (Official) — secondary */}
+                  <div>
+                    <div className={cn(
+                      "text-base font-semibold tabular-nums leading-tight",
+                      profitSummary.tax_profit.value >= 0 ? "text-emerald-700/80 dark:text-emerald-400/80" : "text-red-500"
+                    )}>
+                      {formatCurrency(profitSummary.tax_profit.value, "THB", "th-TH")}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground leading-tight font-medium">
+                      Tax Profit (Official)
+                    </div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">
+                      Non-cash · WAC method
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Closing @{" "}
+                      <span className="font-medium">
+                        ฿{profitSummary.closing_rate_owner.toLocaleString()}/gm
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground animate-pulse">Computing…</div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
         <Card className={cn("lg:col-span-1 min-w-0 border-l-4", grossMargin >= 0 ? "border-l-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/10" : "border-l-red-500 bg-red-50/40 dark:bg-red-950/20")}>
-          <CardHeader className="py-4 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-[10px] font-semibold uppercase tracking-wider",
-                  grossMargin >= 0
-                    ? "border-emerald-600/50 bg-emerald-50/90 text-emerald-900 dark:border-emerald-500/50 dark:bg-emerald-950/50 dark:text-emerald-200"
-                    : "border-red-600/50 bg-red-50/90 text-red-900 dark:border-red-500/50 dark:bg-red-950/50 dark:text-red-200"
-                )}
-              >
-                {grossMargin >= 0 ? "Net profit" : "Net loss"}
-              </Badge>
-              <CardTitle className="text-sm">Gross Margin</CardTitle>
-            </div>
+          <CardHeader className="py-3 space-y-1">
+            <CardTitle className="text-sm">Net Profit</CardTitle>
           </CardHeader>
-          <CardContent className="pb-4">
+          <CardContent className="pb-3">
             <div
-              className={cn("text-2xl font-semibold tabular-nums", grossMargin >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600")}
-              aria-label={`Gross margin ${grossMargin >= 0 ? "profit" : "loss"} ${formatCurrency(Math.abs(grossMargin), "THB", "th-TH")}`}
+              className={cn("text-xl font-semibold tabular-nums", grossMargin >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600")}
             >
               {grossMargin >= 0 ? "+" : ""}{formatCurrency(grossMargin, "THB", "th-TH")}
             </div>
@@ -541,13 +803,14 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
       )}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Stock balance (from ledger)</CardTitle>
+            <CardTitle className="text-sm">Stock Balance (last 24 months)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-72 w-full">
@@ -557,7 +820,12 @@ export default function DashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={ledger90d}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={formatLedgerDate}
+                    interval="preserveStartEnd"
+                  />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} />
                   <Area
@@ -586,7 +854,11 @@ export default function DashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={monthlyVolume}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={formatMonthKey}
+                  />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip contentStyle={chartTooltipStyle} labelStyle={chartTooltipLabelStyle} />
                   <Legend />

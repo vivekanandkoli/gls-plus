@@ -13,11 +13,13 @@ import {
 import { cn } from "@/lib/utils";
 import { getSupabaseClient } from "@/lib/supabase";
 import { PRIMARY_NAV } from "@/components/layout/app-nav-config";
+import { usePendingCount } from "@/hooks/use-app-user";
 
 export function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const { count: pendingCount } = usePendingCount(true);
 
   async function handleSignOut() {
     setOpen(false);
@@ -135,6 +137,11 @@ export function MobileNav() {
                 )}
                 <Icon className={cn("h-4 w-4 shrink-0", active ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/50")} />
                 {label}
+                {href === "/transactions" && pendingCount > 0 && (
+                  <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
+                    {pendingCount > 99 ? "99+" : pendingCount}
+                  </span>
+                )}
               </Link>
             );
           })}

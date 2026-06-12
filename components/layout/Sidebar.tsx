@@ -10,10 +10,12 @@ import {
 import { cn } from "@/lib/utils";
 import { getSupabaseClient } from "@/lib/supabase";
 import { PRIMARY_NAV } from "@/components/layout/app-nav-config";
+import { usePendingCount } from "@/hooks/use-app-user";
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { count: pendingCount } = usePendingCount(true);
 
   async function handleSignOut() {
     await getSupabaseClient().auth.signOut();
@@ -102,6 +104,11 @@ export function Sidebar() {
                 )}
               />
               {label}
+              {href === "/deals" && pendingCount > 0 && (
+                <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">
+                  {pendingCount > 99 ? "99+" : pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}

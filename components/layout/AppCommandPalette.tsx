@@ -14,10 +14,18 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { PRIMARY_NAV, QUICK_ACTIONS } from "@/components/layout/app-nav-config";
+import { useAppUser } from "@/hooks/use-app-user";
+
+const ADMIN_QUICK_ACTION_HREFS = new Set(["/transactions/import", "/settings/audit-log"]);
 
 export function AppCommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const { isAdmin } = useAppUser();
+
+  const quickActions = isAdmin
+    ? QUICK_ACTIONS
+    : QUICK_ACTIONS.filter((item) => !ADMIN_QUICK_ACTION_HREFS.has(item.href));
 
   const navigate = useCallback(
     (href: string) => {
@@ -58,7 +66,7 @@ export function AppCommandPalette() {
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
           <CommandGroup heading="Quick actions">
-            {QUICK_ACTIONS.map((item) => {
+            {quickActions.map((item) => {
               const Icon = item.icon;
               const value = `${item.label} ${item.href}`;
               return (
