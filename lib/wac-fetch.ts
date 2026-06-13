@@ -78,35 +78,22 @@ export async function fetchAllTransactionsForWacWithClient(
   let offset = 0;
 
   for (;;) {
-    let chain = supabase
-      .from("transactions")
-      .select(WAC_SELECT)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = supabase.from("transactions").select(WAC_SELECT);
+
+    if (approvedOnly || officialOnly) {
+      q = q.eq("status", "approved");
+    }
+    if (officialOnly) {
+      q = q.neq("transaction_mode", "cash");
+    }
+
+    q = q
       .order("date", { ascending: true })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
 
-    if (approvedOnly) {
-      chain = supabase
-        .from("transactions")
-        .select(WAC_SELECT)
-        .eq("status", "approved")
-        .order("date", { ascending: true })
-        .order("created_at", { ascending: true })
-        .order("id", { ascending: true });
-    }
-
-    if (officialOnly) {
-      chain = supabase
-        .from("transactions")
-        .select(WAC_SELECT)
-        .eq("status", "approved")
-        .eq("transaction_mode", "official")
-        .order("date", { ascending: true })
-        .order("created_at", { ascending: true })
-        .order("id", { ascending: true });
-    }
-
-    const { data, error } = await chain.range(offset, offset + batchSize - 1);
+    const { data, error } = await q.range(offset, offset + batchSize - 1);
 
     if (error) throw error;
 

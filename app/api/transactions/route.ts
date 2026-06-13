@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     const notes = typeof body?.notes === "string" ? body.notes.trim() || null : null;
     const rawMode = body?.transactionMode;
     const transactionMode =
-      rawMode === "cash" && user.role === "ADMIN" ? "cash" : "official";
+      rawMode === "cash" && (user.role as string) === "ADMIN" ? "cash" : "official";
 
     if (!clientId || !type || !date || !invoiceNumber || !weightGrams || !ratePerGram) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
