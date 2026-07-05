@@ -178,3 +178,13 @@ begin
       'create policy authenticated_read on gls.%I for select to authenticated using (true);', t);
   end loop;
 end $$;
+
+-- ── Grants for the PostgREST API roles ──────────────────────────────────────
+-- The gls schema must be usable by the API roles; RLS (above) still gates
+-- anon/authenticated to SELECT, while writes go through service_role (which
+-- bypasses RLS) in the server-side API routes.
+grant usage on schema gls to anon, authenticated, service_role;
+grant all on all tables    in schema gls to anon, authenticated, service_role;
+grant all on all sequences in schema gls to anon, authenticated, service_role;
+alter default privileges in schema gls grant all on tables    to anon, authenticated, service_role;
+alter default privileges in schema gls grant all on sequences to anon, authenticated, service_role;
