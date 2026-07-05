@@ -1,0 +1,38 @@
+# Supabase local development config.
+# If your installed CLI version rejects any key here, run `supabase init` once to
+# regenerate a version-matched file, then re-add the two GLS-specific bits noted
+# below (the `gls` schema in [api].schemas / search_path).
+
+project_id = "gls-plus"
+
+[api]
+enabled = true
+port = 54321
+# GLS-specific: expose the `gls` schema (not just public) over PostgREST.
+schemas = ["public", "graphql_public", "gls"]
+extra_search_path = ["public", "extensions", "gls"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
