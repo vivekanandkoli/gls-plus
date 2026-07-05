@@ -43,7 +43,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { useAppUser } from "@/hooks/use-app-user";
 import type { PaymentMode } from "@/lib/deals-service";
 
-type ClientRow = { id: number; name: string };
+type ClientRow = { id: string; name: string };
 
 const PAYMENT_MODES: { value: PaymentMode; label: string; icon: string }[] = [
   { value: "bank", label: "Bank Transfer", icon: "🏦" },
@@ -55,9 +55,9 @@ const PAYMENT_MODES: { value: PaymentMode; label: string; icon: string }[] = [
 const schema = z.object({
   date: z.date(),
   weightGm: z.coerce.number().gt(0, "Weight must be > 0"),
-  buyClientId: z.number().nullable(),
+  buyClientId: z.string().nullable(),
   buyRate: z.coerce.number().gt(0, "Buy rate must be > 0"),
-  sellClientId: z.number().nullable(),
+  sellClientId: z.string().nullable(),
   sellRate: z.coerce.number().gt(0, "Sell rate must be > 0"),
   paymentMode: z.enum(["cash", "bank", "qr", "cheque"]),
   notes: z.string().optional(),
@@ -72,8 +72,8 @@ function ClientSelector({
   onChange,
 }: {
   label: string;
-  value: number | null;
-  onChange: (id: number | null) => void;
+  value: string | null;
+  onChange: (id: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<ClientRow[]>([]);

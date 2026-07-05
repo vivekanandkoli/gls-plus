@@ -73,9 +73,9 @@ export async function POST(req: Request) {
 
     const date = typeof body?.date === "string" ? body.date : null;
     const weightGm = typeof body?.weightGm === "number" ? body.weightGm : null;
-    const buyClientId = typeof body?.buyClientId === "number" ? body.buyClientId : null;
+    const buyClientId = typeof body?.buyClientId === "string" && body.buyClientId ? body.buyClientId : null;
     const buyRate = typeof body?.buyRate === "number" ? body.buyRate : null;
-    const sellClientId = typeof body?.sellClientId === "number" ? body.sellClientId : null;
+    const sellClientId = typeof body?.sellClientId === "string" && body.sellClientId ? body.sellClientId : null;
     const sellRate = typeof body?.sellRate === "number" ? body.sellRate : null;
     const paymentMode = PAYMENT_MODES.includes(body?.paymentMode) ? (body.paymentMode as PaymentMode) : null;
     const notes = typeof body?.notes === "string" ? body.notes.trim() || null : null;

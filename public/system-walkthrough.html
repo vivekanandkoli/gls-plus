@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GLS Plus — System Walkthrough</title>
+<style>
+  :root{
+    --gold:#C9A227; --gold-light:#E8C84A;
+    --teal:#5EC9B7;
+    --good:#6FCF97; --bad:#EB5757;
+    --dark:#0f0e0c; --dark2:#1c1917; --dark3:#2a2825;
+    --cream:#FAF8F5; --text:#f0ebe2; --muted:#9e9689;
+    --border: rgba(201,162,39,0.25);
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; font-family:'Segoe UI',Arial,sans-serif;
+    background:var(--dark); color:var(--text);
+    padding:48px 24px 100px;
+  }
+  .wrap{ max-width:1000px; margin:0 auto; }
+  header{ text-align:center; margin-bottom:56px; }
+  .eyebrow{ font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); font-weight:600; }
+  h1{ font-size:36px; margin:10px 0 8px; color:var(--cream); }
+  h1 span{ color:var(--gold); }
+  .sub{ color:var(--muted); font-size:15px; max-width:560px; margin:0 auto; line-height:1.6; }
+  .toolbar{ display:flex; justify-content:center; gap:12px; margin-top:24px; }
+  .toolbar button{
+    background:none; border:1px solid var(--border); color:var(--text);
+    padding:9px 18px; border-radius:8px; font-size:13px; cursor:pointer;
+  }
+  .toolbar button:hover{ border-color:var(--gold); color:var(--gold-light); }
+  .toolbar button.primary{ background:var(--gold); color:var(--dark); border-color:var(--gold); font-weight:600; }
+  .toolbar button.primary:hover{ background:var(--gold-light); color:var(--dark); }
+
+  section{ margin-bottom:80px; }
+  h2.section-title{ font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); margin:0 0 8px; text-align:center; }
+  h2.section-heading{ font-size:24px; color:var(--cream); text-align:center; margin:0 0 36px; }
+
+  /* ── flow diagram ─────────────────────────────── */
+  .flow{ max-width:560px; margin:0 auto; }
+  .flow-step{ display:flex; gap:16px; align-items:flex-start; }
+  .flow-stem{ width:52px; display:flex; justify-content:center; }
+  .flow-stem span{ width:1px; height:26px; background:var(--border); display:block; }
+  .badge{
+    width:52px; height:52px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:18px; background:var(--dark2); border:1px solid var(--border); color:var(--muted);
+  }
+  .badge.wait{ background:rgba(201,162,39,.15); border-color:var(--gold); color:var(--gold-light); }
+  .badge.good{ background:rgba(111,207,151,.15); border-color:var(--good); color:var(--good); }
+  .badge.bad{ background:rgba(235,87,87,.15); border-color:var(--bad); color:var(--bad); }
+  .badge.auto{ background:rgba(94,201,183,.15); border-color:var(--teal); color:var(--teal); }
+  .flow-text{ padding-top:8px; }
+  .flow-text p.t{ font-weight:600; font-size:15px; margin:0; color:var(--cream); }
+  .flow-text p.d{ font-size:13px; margin:2px 0 0; color:var(--muted); }
+  .flow-branch{ display:flex; gap:24px; }
+  .flow-branch .flow-step{ flex:1; }
+
+  /* ── mind map ──────────────────────────────────── */
+  .mindmap{ text-align:center; }
+  .hub{
+    display:inline-block; background:var(--gold); color:var(--dark);
+    font-weight:700; font-size:17px; padding:16px 30px; border-radius:14px;
+  }
+  .stem-down{ width:1px; height:28px; background:var(--border); margin:0 auto; }
+  .branches{ display:flex; justify-content:center; gap:56px; width:696px; max-width:100%; margin:0 auto; position:relative; padding-top:28px; }
+  .branches::before{ content:''; position:absolute; top:0; left:160px; right:160px; height:1px; background:var(--border); }
+  .branch-col{ width:320px; text-align:left; }
+  .stem-up{ width:1px; height:28px; background:var(--border); margin:0 auto; }
+  .branch-head{ text-align:center; font-weight:700; font-size:14px; padding:10px; border-radius:8px; margin-bottom:12px; }
+  .branch-head.gold{ background:rgba(201,162,39,.12); color:var(--gold-light); border:1px solid var(--border); }
+  .branch-head.teal{ background:rgba(94,201,183,.12); color:var(--teal); border:1px solid rgba(94,201,183,.3); }
+  .branch-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .branch-list li{
+    background:var(--dark2); border:1px solid rgba(255,255,255,.07); border-radius:8px;
+    padding:10px 14px; font-size:13.5px; color:#d8d0c2;
+  }
+  @media (max-width:720px){
+    .branches{ flex-direction:column; align-items:center; gap:32px; }
+    .branches::before{ display:none; }
+    .branch-col{ width:100%; max-width:340px; }
+  }
+
+  /* ── new-since callout ────────────────────────── */
+  .callout-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; max-width:820px; margin:0 auto; }
+  .callout{ background:var(--dark2); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; }
+  .callout .n{ font-weight:700; font-size:14px; color:var(--gold-light); margin:0 0 4px; }
+  .callout .d{ font-size:12.5px; color:var(--muted); margin:0; line-height:1.5; }
+  @media (max-width:720px){ .callout-grid{ grid-template-columns:repeat(2,1fr); } }
+
+  /* ── feature cards ─────────────────────────────── */
+  .feature-card{
+    background:var(--dark2); border:1px solid rgba(255,255,255,.07); border-radius:12px;
+    padding:24px 26px; margin-bottom:18px;
+  }
+  .feature-head{ display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+  .f-icon{ width:34px; height:34px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; }
+  .f-icon.gold{ background:rgba(201,162,39,.15); color:var(--gold-light); }
+  .f-icon.teal{ background:rgba(94,201,183,.15); color:var(--teal); }
+  .f-name{ font-size:17px; font-weight:600; color:var(--cream); }
+  .f-tag{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-left:auto; }
+  .feature-card ul{ margin:0 0 16px; padding-left:20px; color:#d8d0c2; font-size:14px; line-height:1.8; }
+  .feature-card label{ display:block; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px; }
+  .feature-card textarea{
+    width:100%; min-height:64px; background:var(--dark3); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); font-family:inherit; font-size:14px; padding:10px 12px; resize:vertical;
+  }
+  .feature-card textarea:focus{ outline:none; border-color:var(--gold); }
+
+  footer{ text-align:center; color:var(--muted); font-size:12px; margin-top:40px; }
+
+  @media print{
+    body{ background:#fff; color:#111; padding:20px; }
+    .toolbar{ display:none; }
+    .hub{ background:#fff; color:#111; border:2px solid #111; }
+    .badge, .f-icon{ background:#fff !important; }
+    .badge.wait{ border-color:#111; color:#111; }
+    .badge.good, .badge.bad, .badge.auto{ border-color:#111; color:#111; }
+    .flow-text p.t, .branch-head, .f-name, h1, h2.section-heading{ color:#111; }
+    .flow-text p.d, .sub, .branch-list li, .feature-card ul, footer{ color:#444; }
+    .feature-card, .callout, .branch-list li{ background:#fff; border-color:#ccc; }
+    .branch-head.gold, .branch-head.teal{ background:#fff; border-color:#111; color:#111; }
+    .feature-card textarea{ background:#fff; border:1px solid #999; min-height:90px; }
+    section{ break-inside:avoid; margin-bottom:40px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">GLS Plus</div>
+    <h1>System walkthrough <span>&amp; feedback</span></h1>
+    <p class="sub">A plain-language guide to what the system does today, module by module — with space to capture your feedback and requested changes as we go.</p>
+    <div class="toolbar">
+      <button onclick="window.print()">Print this page</button>
+      <button class="primary" onclick="downloadNotes()">Download meeting notes</button>
+    </div>
+  </header>
+
+  <section>
+    <h2 class="section-title">How one transaction flows</h2>
+    <h2 class="section-heading">From a staff entry to a finished record</h2>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="badge">1</div>
+        <div class="flow-text"><p class="t">Staff records a buy or sell</p><p class="d">Weight, rate, client, invoice number</p></div>
+      </div>
+      <div class="flow-stem"><span></span></div>
+      <div class="flow-step">
+        <div class="badge wait">2</div>
+        <div class="flow-text"><p class="t">Waits as pending</p><p class="d">Doesn't affect stock or profit yet</p></div>
+      </div>
+      <div class="flow-stem"><span></span></div>
+      <div class="flow-step">
+        <div class="badge">3</div>
+        <div class="flow-text"><p class="t">Admin reviews it</p><p class="d">Two possible outcomes</p></div>
+      </div>
+      <div class="flow-stem"><span></span></div>
+      <div class="flow-branch">
+        <div class="flow-step">
+          <div class="badge good">&#10003;</div>
+          <div class="flow-text"><p class="t">Approved</p><p class="d">Now official</p></div>
+        </div>
+        <div class="flow-step">
+          <div class="badge bad">&#10005;</div>
+          <div class="flow-text"><p class="t">Rejected</p><p class="d">Back to staff, with a reason</p></div>
+        </div>
+      </div>
+      <div class="flow-stem"><span></span></div>
+      <div class="flow-step">
+        <div class="badge auto">&#8635;</div>
+        <div class="flow-text"><p class="t">Stock and true cost update automatically</p><p class="d">Recalculated instantly, no manual math</p></div>
+      </div>
+      <div class="flow-stem"><span></span></div>
+      <div class="flow-step">
+        <div class="badge">5</div>
+        <div class="flow-text"><p class="t">Powers dashboards, invoices and reports</p><p class="d">Always live, always accurate</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">The whole system at a glance</h2>
+    <h2 class="section-heading">Every module, grouped by purpose</h2>
+    <div class="mindmap">
+      <div class="hub">GLS Plus</div>
+      <div class="stem-down"></div>
+      <div class="branches">
+        <div class="branch-col">
+          <div class="stem-up"></div>
+          <div class="branch-head gold">Daily operations</div>
+          <ul class="branch-list">
+            <li>Transactions</li>
+            <li>Deals</li>
+            <li>Clients</li>
+            <li>Invoices</li>
+          </ul>
+        </div>
+        <div class="branch-col">
+          <div class="stem-up"></div>
+          <div class="branch-head teal">Oversight &amp; insights</div>
+          <ul class="branch-list">
+            <li>Approvals</li>
+            <li>Cost engine (WAC)</li>
+            <li>Dashboard</li>
+            <li>Reports &amp; statements</li>
+            <li>User management</li>
+            <li>Activity log</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Since we last spoke</h2>
+    <h2 class="section-heading">What's new in this release</h2>
+    <div class="callout-grid">
+      <div class="callout"><p class="n">Deals</p><p class="d">Bundle bulk trades into one record</p></div>
+      <div class="callout"><p class="n">True-cost engine</p><p class="d">Auto profit calculation, no more manual WAC</p></div>
+      <div class="callout"><p class="n">Approval workflow</p><p class="d">Staff submit, admin signs off</p></div>
+      <div class="callout"><p class="n">Cash mode</p><p class="d">Off-book entries kept separate from official books</p></div>
+      <div class="callout"><p class="n">Statements</p><p class="d">Accountant-ready exports, any period</p></div>
+      <div class="callout"><p class="n">Activity log</p><p class="d">Full record of who changed what, when</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title">Feature by feature</h2>
+    <h2 class="section-heading">Walk through each module and note his feedback</h2>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon gold">Tx</div><div class="f-name">Transactions</div><div class="f-tag">Daily operations</div></div>
+      <ul>
+        <li>Every gold buy and sell is logged with weight, rate, client and an auto-numbered invoice.</li>
+        <li>Sellers see an estimated profit before they even submit the sale.</li>
+        <li>If a sale's rate looks far off from the true cost, the system flags it for a second look.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon gold">De</div><div class="f-name">Deals</div><div class="f-tag">Daily operations</div></div>
+      <ul>
+        <li>Bundles several transactions into one larger, wholesale-style trade.</li>
+        <li>Goes through the same admin approval before it counts.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon gold">Cl</div><div class="f-name">Clients</div><div class="f-tag">Daily operations</div></div>
+      <ul>
+        <li>A directory of every buyer and seller, with full transaction history and running totals.</li>
+        <li>Quick-select an existing client, or add a new one, right from the transaction form.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon gold">In</div><div class="f-name">Invoices</div><div class="f-tag">Daily operations</div></div>
+      <ul>
+        <li>Professional, printable invoices generated automatically from the transaction data.</li>
+        <li>Admin can correct an invoice number after the fact — the change is recorded.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon teal">Ap</div><div class="f-name">Approvals</div><div class="f-tag">Oversight &amp; insights</div></div>
+      <ul>
+        <li>Staff submit; nothing counts toward stock or profit until an admin approves it.</li>
+        <li>Admin can reject with a reason — staff fix and resubmit.</li>
+        <li>Admin's own entries are approved automatically.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon teal">Wa</div><div class="f-name">Cost engine (WAC)</div><div class="f-tag">Oversight &amp; insights</div></div>
+      <ul>
+        <li>Automatically works out the true average cost of the gold currently on hand.</li>
+        <li>Every sale's profit is measured against that true cost, not a guess.</li>
+        <li>Recalculates itself the moment any historical entry is approved, edited or removed.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon teal">Da</div><div class="f-name">Dashboard</div><div class="f-tag">Oversight &amp; insights</div></div>
+      <ul>
+        <li>One glance shows current stock, this month's buy and sell volume, and profit.</li>
+        <li>Compares two profit views side by side: your own set rate versus the system's true-cost calculation.</li>
+        <li>Warns you when stock drops below the level you've set.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon teal">Re</div><div class="f-name">Reports &amp; statements</div><div class="f-tag">Oversight &amp; insights</div></div>
+      <ul>
+        <li>Accountant-ready monthly, per-client and annual statements.</li>
+        <li>Cash transactions are tracked separately and never mixed into official statements.</li>
+        <li>Everything can be printed or exported to Excel.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon teal">Us</div><div class="f-name">User management</div><div class="f-tag">Oversight &amp; insights</div></div>
+      <ul>
+        <li>Create staff logins and assign them admin or staff access.</li>
+        <li>Deactivate anyone instantly — no server changes needed.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon teal">Ac</div><div class="f-name">Activity log</div><div class="f-tag">Oversight &amp; insights</div></div>
+      <ul>
+        <li>Every change to every transaction is recorded — who did it, and when.</li>
+        <li>A complete paper trail if anything is ever questioned later.</li>
+      </ul>
+      <label>Owner feedback / requested changes</label>
+      <textarea placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-head"><div class="f-icon gold">Ge</div><div class="f-name">General feedback</div><div class="f-tag">Overall</div></div>
+      <label>Anything else he raised, priorities, or things to change before the next release</label>
+      <textarea style="min-height:120px" placeholder="Write notes here during the meeting..."></textarea>
+    </div>
+
+    <div class="toolbar" style="margin-top:32px;">
+      <button onclick="window.print()">Print this page</button>
+      <button class="primary" onclick="downloadNotes()">Download meeting notes</button>
+    </div>
+  </section>
+
+  <footer>GLS Plus — internal walkthrough document</footer>
+</div>
+
+<script>
+function downloadNotes(){
+  var cards = document.querySelectorAll('.feature-card');
+  var lines = ['GLS Plus meeting notes', new Date().toLocaleDateString(), ''];
+  cards.forEach(function(c){
+    var name = c.querySelector('.f-name').textContent.trim();
+    var ta = c.querySelector('textarea');
+    var note = ta ? ta.value.trim() : '';
+    lines.push('## ' + name);
+    lines.push(note || '(no notes)');
+    lines.push('');
+  });
+  var blob = new Blob([lines.join('\n')], {type:'text/plain'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'gls-plus-meeting-notes-' + new Date().toISOString().slice(0,10) + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+</script>
+</body>
+</html>

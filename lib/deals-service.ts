@@ -15,10 +15,10 @@ export interface DealRecord {
   id: number;
   date: string;
   weight_gm: number;
-  buy_client_id: number | null;
+  buy_client_id: string | null;
   buy_rate: number;
   buy_amount: number | null;
-  sell_client_id: number | null;
+  sell_client_id: string | null;
   sell_rate: number;
   sell_amount: number | null;
   trading_profit: number | null;
@@ -183,9 +183,9 @@ export async function fetchDeal(
 export interface CreateDealInput {
   date: string;
   weightGm: number;
-  buyClientId: number | null;
+  buyClientId: string | null;
   buyRate: number;
-  sellClientId: number | null;
+  sellClientId: string | null;
   sellRate: number;
   paymentMode: PaymentMode;
   notes?: string | null;
