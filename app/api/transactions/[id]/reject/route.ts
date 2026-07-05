@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth-server";
-import { rejectTransaction } from "@/lib/transactions-service";
+import { rejectTransaction } from "@/lib/txn-service";
 
 type Ctx = { params: Promise<{ id: string }> };
 

@@ -1,85 +1,97 @@
 import { NextResponse } from "next/server";
 
 import { requireAppUser } from "@/lib/auth-server";
-import { logTransactionAudit } from "@/lib/transaction-audit";
-import { initialStatusForRole } from "@/lib/transaction-permissions";
-import { rebuildStockLedgerFromDate } from "@/lib/transactions-service";
-import { createSupabaseServiceClient } from "@/lib/supabase-service";
-import { checkWacColumnsAvailable } from "@/lib/wac-columns";
-import { persistWacRecalculation } from "@/lib/wac-persist";
+import {
+  createTransaction,
+  listTransactions,
+  type CreateTxnInput,
+  type PaymentMode,
+  type TxType,
+  type TxnStatus,
+} from "@/lib/txn-service";
+import type { Book } from "@/lib/opening-balances";
 
+export const dynamic = "force-dynamic";
+
+const BOOKS = ["official", "unofficial"] as const;
+const TYPES = ["BUY", "SELL"] as const;
+const MODES = ["bank", "qr", "cheque", "cash"] as const;
+
+// ── GET /api/transactions ─────────────────────────────────────────────────────
+export async function GET(req: Request) {
+  const user = await requireAppUser();
+  if (user instanceof NextResponse) return user;
+
+  const { searchParams } = new URL(req.url);
+  const bookParam = searchParams.get("book");
+  const book = BOOKS.includes(bookParam as Book) ? (bookParam as Book) : undefined;
+  const statusParam = searchParams.get("status") as TxnStatus | "all" | null;
+  const page = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10) || 0);
+  const pageSize = parseInt(searchParams.get("pageSize") ?? "50", 10) || 50;
+
+  // Staff only ever see approved rows; admins may filter by any status.
+  const status: TxnStatus | "all" =
+    user.role !== "admin" ? "approved" : statusParam ?? "all";
+
+  try {
+    const result = await listTransactions({ book, status, page, pageSize });
+    return NextResponse.json(result);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to fetch transactions";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// ── POST /api/transactions ────────────────────────────────────────────────────
 export async function POST(req: Request) {
   const user = await requireAppUser();
   if (user instanceof NextResponse) return user;
 
   try {
     const body = await req.json().catch(() => null);
-    const clientId = typeof body?.clientId === "string" ? body.clientId : null;
-    const type = body?.type === "BUY" || body?.type === "SELL" ? body.type : null;
+
+    const book = BOOKS.includes(body?.book) ? (body.book as Book) : null;
+    const type = TYPES.includes(body?.type) ? (body.type as TxType) : null;
     const date = typeof body?.date === "string" ? body.date : null;
-    const invoiceNumber =
-      typeof body?.invoiceNumber === "string" ? body.invoiceNumber : null;
-    const weightGrams = typeof body?.weightGrams === "number" ? body.weightGrams : null;
-    const ratePerGram = typeof body?.ratePerGram === "number" ? body.ratePerGram : null;
-    const vatPercent = typeof body?.vatPercent === "number" ? body.vatPercent : 0;
-    const notes = typeof body?.notes === "string" ? body.notes.trim() || null : null;
-    const rawMode = body?.transactionMode;
-    const transactionMode =
-      rawMode === "cash" && (user.role as string) === "ADMIN" ? "cash" : "official";
+    const weightGrams = Number(body?.weightGrams);
+    const ratePerGram = Number(body?.ratePerGram);
+    const paymentMode: PaymentMode = MODES.includes(body?.paymentMode)
+      ? (body.paymentMode as PaymentMode)
+      : "cash";
+    const clientId =
+      typeof body?.clientId === "string" && body.clientId ? body.clientId : null;
+    const vatRaw =
+      body?.vatPercent === null || body?.vatPercent === undefined
+        ? null
+        : Number(body.vatPercent);
+    const notes = typeof body?.notes === "string" ? body.notes : null;
 
-    if (!clientId || !type || !date || !invoiceNumber || !weightGrams || !ratePerGram) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!book || !type || !date || !(weightGrams > 0) || !(ratePerGram > 0)) {
+      return NextResponse.json({ error: "Missing or invalid fields" }, { status: 400 });
     }
 
-    const status = initialStatusForRole(user.role);
-    const amountThb = weightGrams * ratePerGram;
-    const now = status === "approved" ? new Date().toISOString() : null;
-
-    const supabase = createSupabaseServiceClient() as any;
-    const { data: inserted, error } = await supabase
-      .from("transactions")
-      .insert({
-        client_id: clientId,
-        type,
-        date,
-        invoice_number: invoiceNumber,
-        weight_grams: weightGrams,
-        rate_per_gram: ratePerGram,
-        amount_thb: amountThb,
-        vat_percent: vatPercent,
-        notes,
-        status,
-        transaction_mode: transactionMode,
-        created_by: user.id,
-        approved_by: status === "approved" ? user.id : null,
-        approved_at: now,
-      })
-      .select(
-        "id,client_id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,status,transaction_mode,created_by,approved_by,approved_at,rejection_reason"
-      )
-      .single();
-
-    if (error) throw new Error(error.message);
-
-    if (status === "approved") {
-      await rebuildStockLedgerFromDate(supabase, date);
-      const hasColumns = await checkWacColumnsAvailable(supabase as never);
-      if (hasColumns) {
-        await persistWacRecalculation(supabase as never, {
-          fromDate: date,
-          fromId: inserted.id,
-        });
-      }
+    // Unofficial (off-book) entries are admin-only, matching the old cash-mode rule.
+    if (book === "unofficial" && user.role !== "admin") {
+      return NextResponse.json(
+        { error: "Only admins can record unofficial transactions" },
+        { status: 403 }
+      );
     }
 
-    await logTransactionAudit({
-      transactionId: inserted.id,
-      action: "created",
-      performedBy: user.id,
-      newValues: inserted as Record<string, unknown>,
-    });
+    const input: CreateTxnInput = {
+      book,
+      date,
+      type,
+      clientId,
+      weightGrams,
+      ratePerGram,
+      paymentMode,
+      vatPercent: vatRaw !== null && Number.isFinite(vatRaw) ? vatRaw : null,
+      notes,
+    };
 
-    return NextResponse.json({ transaction: inserted }, { status: 201 });
+    const transaction = await createTransaction(input, user);
+    return NextResponse.json({ transaction }, { status: 201 });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Create failed";
     return NextResponse.json({ error: message }, { status: 500 });
