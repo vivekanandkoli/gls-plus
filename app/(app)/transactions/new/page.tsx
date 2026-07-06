@@ -41,73 +41,39 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getSupabaseClient } from "@/lib/supabase";
-import { useCurrentWac } from "@/hooks/use-current-wac";
 import { useAppUser } from "@/hooks/use-app-user";
 
-type TxType = "BUY" | "SELL";
-type TxMode = "official" | "cash";
+type Book = "official" | "unofficial";
+type PaymentMode = "bank" | "qr" | "cheque" | "cash";
 type ClientRow = { id: string; name: string };
 
+const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
+  { value: "bank", label: "Bank" },
+  { value: "qr", label: "QR" },
+  { value: "cheque", label: "Cheque" },
+  { value: "cash", label: "Cash" },
+];
+
 const schema = z.object({
+  book: z.enum(["official", "unofficial"]),
   type: z.enum(["BUY", "SELL"]),
-  mode: z.enum(["official", "cash"]).default("official"),
   date: z.date(),
   clientId: z.string().min(1, "Client is required"),
   weightGrams: z.coerce.number().gt(0, "Weight must be > 0"),
   ratePerGram: z.coerce.number().gt(0, "Rate must be > 0"),
+  paymentMode: z.enum(["bank", "qr", "cheque", "cash"]),
   vatPercent: z.coerce.number().min(0, "VAT cannot be negative"),
   notes: z.string().optional(),
 });
 
 type FormValues = z.output<typeof schema>;
 
-function pad3(n: number) {
-  return String(n).padStart(3, "0");
-}
-
-function yymmdd(d: Date) {
-  return format(d, "yyMMdd");
-}
-
-function yyyymmdd(d: Date) {
-  return format(d, "yyyyMMdd");
-}
-
-async function generateInvoiceNumber(type: TxType, date: Date, mode: TxMode = "official") {
-  const supabase = getSupabaseClient() as any;
-
-  if (mode === "cash") {
-    // Auto-generate CASH-YYYYMMDD-001 format
-    const day = yyyymmdd(date);
-    const prefix = `CASH-${day}-`;
-    const like = `${prefix}%`;
-    const { count } = await supabase
-      .from("transactions")
-      .select("id", { count: "exact", head: true })
-      .ilike("invoice_number", like);
-    const seq = ((count as number) ?? 0) + 1;
-    return `${prefix}${pad3(seq)}`;
-  }
-
-  const prefix = type === "BUY" ? "IV" : "UP";
-  const day = yymmdd(date);
-  const like = `${prefix}${day}%`;
-
-  const { count, error } = await supabase
-    .from("transactions")
-    .select("id", { count: "exact", head: true })
-    .eq("type", type)
-    .ilike("invoice_number", like);
-  if (error) throw error;
-
-  const seq = (count ?? 0) + 1;
-  return `${prefix}${day}${pad3(seq)}`;
-}
+type WacState = { wac: number; stockGm: number; stockValueThb: number };
+type WacByBook = { official: WacState; unofficial: WacState };
 
 export default function NewTransactionPage() {
   const router = useRouter();
-  const { user: appUser, isAdmin } = useAppUser();
-  const { currentWac, stockGm, loading: wacLoading } = useCurrentWac();
+  const { isAdmin } = useAppUser();
 
   const [clientsOpen, setClientsOpen] = useState(false);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -121,53 +87,60 @@ export default function NewTransactionPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pendingValues, setPendingValues] = useState<FormValues | null>(null);
-  const [previewInvoice, setPreviewInvoice] = useState<string>("");
-  const [invoiceDuplicate, setInvoiceDuplicate] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [wac, setWac] = useState<WacByBook | null>(null);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as never,
     defaultValues: {
+      book: "official",
       type: "BUY",
-      mode: "official",
       date: new Date(),
       clientId: "",
       weightGrams: 0,
       ratePerGram: 0,
+      paymentMode: "bank",
       vatPercent: 0,
       notes: "",
     },
     mode: "onChange",
   });
 
+  const book = form.watch("book");
   const type = form.watch("type");
-  const mode = form.watch("mode") as TxMode;
-  const date = form.watch("date");
   const weight = form.watch("weightGrams");
   const rate = form.watch("ratePerGram");
   const vat = form.watch("vatPercent");
-  const isCash = mode === "cash";
+  const isUnofficial = book === "unofficial";
 
-  // Preview auto-generated invoice number and check for duplicates.
+  // Unofficial is cash-only; force it whenever the book flips to unofficial.
   useEffect(() => {
-    if (!date) return;
+    if (isUnofficial) form.setValue("paymentMode", "cash");
+  }, [isUnofficial, form]);
+
+  // Non-admins can only use the official book.
+  useEffect(() => {
+    if (!isAdmin && book === "unofficial") form.setValue("book", "official");
+  }, [isAdmin, book, form]);
+
+  // Live per-book WAC for the SELL preview.
+  useEffect(() => {
     let cancelled = false;
-    const timer = setTimeout(async () => {
+    void (async () => {
       try {
-        const preview = await generateInvoiceNumber(type, date, mode);
-        if (cancelled) return;
-        setPreviewInvoice(preview);
-        // Cash invoices are auto-generated and always unique; skip duplicate check.
-        if (mode === "cash") { setInvoiceDuplicate(false); return; }
-        const supabase = getSupabaseClient() as any;
-        const { count } = await supabase
-          .from("transactions")
-          .select("id", { count: "exact", head: true })
-          .eq("invoice_number", preview);
-        if (!cancelled) setInvoiceDuplicate((count ?? 0) > 0);
-      } catch { /* ignore */ }
-    }, 400);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [type, date, mode]);
+        const res = await fetch("/api/inventory/wac");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setWac(data as WacByBook);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const amount = useMemo(() => {
     const w = Number.isFinite(weight) ? weight : 0;
@@ -176,29 +149,26 @@ export default function NewTransactionPage() {
   }, [weight, rate]);
 
   const totalWithVat = useMemo(() => {
-    const v = Number.isFinite(vat) ? vat : 0;
+    const v = isUnofficial ? 0 : Number.isFinite(vat) ? vat : 0;
     return amount * (1 + v / 100);
-  }, [amount, vat]);
+  }, [amount, vat, isUnofficial]);
+
+  const bookWac = wac ? wac[book] : null;
 
   useEffect(() => {
     const run = async () => {
       setLoadingClients(true);
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const supabase = getSupabaseClient() as any;
         let q = supabase.from("clients").select("id,name").order("name");
-        if (clientSearch.trim()) {
-          q = q.ilike("name", `%${clientSearch.trim()}%`);
-        }
-        const { data, error } = await q.limit(50);
-        if (error) throw error;
+        if (clientSearch.trim()) q = q.ilike("name", `%${clientSearch.trim()}%`);
+        const { data } = await q.limit(50);
         setClients((data ?? []) as ClientRow[]);
-      } catch (e) {
-        console.warn(e);
       } finally {
         setLoadingClients(false);
       }
     };
-
     if (clientsOpen) void run();
   }, [clientsOpen, clientSearch]);
 
@@ -210,25 +180,22 @@ export default function NewTransactionPage() {
   async function onCreateClient() {
     const name = newClientName.trim();
     if (!name) return;
-
     setSavingClient(true);
     try {
-      const supabase = getSupabaseClient() as any;
-      const { data, error } = await supabase
-        .from("clients")
-        .upsert({ name }, { onConflict: "name" })
-        .select("id,name")
-        .single();
-      if (error) throw error;
-
-      setClients((prev) => {
-        const next = prev.filter((c) => c.id !== data.id);
-        next.unshift(data as ClientRow);
-        return next;
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
       });
-      form.setValue("clientId", data.id, { shouldValidate: true });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to add client");
+      const client = data.client as ClientRow;
+      setClients((prev) => [client, ...prev.filter((c) => c.id !== client.id)]);
+      form.setValue("clientId", client.id, { shouldValidate: true });
       setAddClientOpen(false);
       setNewClientName("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add client");
     } finally {
       setSavingClient(false);
     }
@@ -236,36 +203,31 @@ export default function NewTransactionPage() {
 
   async function submitNow(values: FormValues) {
     setSubmitting(true);
+    setError(null);
     try {
-      const txMode = (values.mode ?? "official") as TxMode;
-      const invoiceNumber = await generateInvoiceNumber(values.type, values.date, txMode);
-      const dateIso = format(values.date, "yyyy-MM-dd");
-
       const res = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clientId: values.clientId,
+          book: values.book,
           type: values.type,
-          date: dateIso,
-          invoiceNumber,
+          date: format(values.date, "yyyy-MM-dd"),
+          clientId: values.clientId,
           weightGrams: values.weightGrams,
           ratePerGram: values.ratePerGram,
-          vatPercent: values.vatPercent,
+          paymentMode: values.book === "unofficial" ? "cash" : values.paymentMode,
+          vatPercent: values.book === "official" ? values.vatPercent : null,
           notes: values.notes?.trim() || null,
-          transactionMode: txMode,
         }),
       });
-
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(typeof data.error === "string" ? data.error : "Create failed");
-      }
-
-      router.push(`/transactions/${data.transaction.id}`);
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Create failed");
+      router.push(`/transactions?book=${values.book}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Create failed");
+      setConfirmOpen(false);
     } finally {
       setSubmitting(false);
-      setConfirmOpen(false);
       setPendingValues(null);
     }
   }
@@ -273,23 +235,26 @@ export default function NewTransactionPage() {
   return (
     <PageWrapper
       title="New transaction"
-      description="Record a buy or sell with weight, rate, VAT, and optional client link."
+      description="Record a buy or sell in the official (tax) or unofficial (vault) book."
     >
       <div
         className={cn(
           "rounded-lg border bg-card p-6 text-card-foreground transition-colors",
-          isCash
-            ? "border-dashed border-zinc-400 bg-zinc-50 dark:bg-zinc-900/30"
-            : type === "BUY"
-            ? "border-emerald-200"
-            : "border-amber-200"
+          isUnofficial ? "border-dashed border-amber-400 bg-amber-50/40 dark:bg-amber-950/10" : "border-border"
         )}
       >
-        {/* Cash mode banner */}
-        {isCash && (
-          <div className="mb-4 flex items-center gap-2 rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
-            <span className="text-base">💰</span>
-            <span>This transaction will <strong>not</strong> appear in official statements or CA reports.</span>
+        {isUnofficial && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-100/70 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            <span className="text-base">🔒</span>
+            <span>
+              Unofficial book — real vault. Cash only, <strong>excluded</strong> from tax/audit reports.
+            </span>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+            {error}
           </div>
         )}
 
@@ -301,51 +266,48 @@ export default function NewTransactionPage() {
             })}
             className="space-y-6"
           >
-            {/* Cash / Official mode toggle — admin only */}
-            {isAdmin && (
-              <FormField
-                control={form.control}
-                name="mode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">Transaction Mode (Admin)</FormLabel>
-                    <FormControl>
-                      <ToggleGroup
-                        type="single"
-                        value={field.value}
-                        onValueChange={(v) => v && field.onChange(v)}
-                        className="grid grid-cols-2 max-w-xs"
+            {/* Book toggle — unofficial admin-only */}
+            <FormField
+              control={form.control}
+              name="book"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Book</FormLabel>
+                  <FormControl>
+                    <ToggleGroup
+                      type="single"
+                      value={field.value}
+                      onValueChange={(v) => v && field.onChange(v)}
+                      className="grid grid-cols-2 max-w-md"
+                    >
+                      <ToggleGroupItem
+                        value="official"
+                        className={cn(
+                          "py-3 text-sm font-medium",
+                          field.value === "official" ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border"
+                        )}
                       >
-                        <ToggleGroupItem
-                          value="official"
-                          className={cn(
-                            "py-2 text-sm font-medium",
-                            field.value === "official"
-                              ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                              : "border"
-                          )}
-                        >
-                          Official
-                        </ToggleGroupItem>
-                        <ToggleGroupItem
-                          value="cash"
-                          className={cn(
-                            "py-2 text-sm font-medium",
-                            field.value === "cash"
-                              ? "bg-zinc-600 text-white hover:bg-zinc-600"
-                              : "border"
-                          )}
-                        >
-                          💰 Cash
-                        </ToggleGroupItem>
-                      </ToggleGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+                        Official (tax)
+                      </ToggleGroupItem>
+                      <ToggleGroupItem
+                        value="unofficial"
+                        disabled={!isAdmin}
+                        className={cn(
+                          "py-3 text-sm font-medium",
+                          field.value === "unofficial" ? "bg-amber-600 text-white hover:bg-amber-600" : "border",
+                          !isAdmin && "opacity-50"
+                        )}
+                      >
+                        🔒 Unofficial (vault)
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
+            {/* Type */}
             <FormField
               control={form.control}
               name="type"
@@ -363,9 +325,7 @@ export default function NewTransactionPage() {
                         value="BUY"
                         className={cn(
                           "py-6 text-base font-semibold",
-                          field.value === "BUY"
-                            ? "bg-emerald-600 text-white hover:bg-emerald-600"
-                            : "border"
+                          field.value === "BUY" ? "bg-emerald-600 text-white hover:bg-emerald-600" : "border"
                         )}
                       >
                         BUY
@@ -374,9 +334,7 @@ export default function NewTransactionPage() {
                         value="SELL"
                         className={cn(
                           "py-6 text-base font-semibold",
-                          field.value === "SELL"
-                            ? "bg-amber-600 text-white hover:bg-amber-600"
-                            : "border"
+                          field.value === "SELL" ? "bg-amber-600 text-white hover:bg-amber-600" : "border"
                         )}
                       >
                         SELL
@@ -402,12 +360,7 @@ export default function NewTransactionPage() {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(d) => d && field.onChange(d)}
-                          initialFocus
-                        />
+                        <Calendar mode="single" selected={field.value} onSelect={(d) => d && field.onChange(d)} initialFocus />
                       </PopoverContent>
                     </Popover>
                     <FormMessage />
@@ -429,15 +382,9 @@ export default function NewTransactionPage() {
                       </PopoverTrigger>
                       <PopoverContent className="p-0" align="start">
                         <Command>
-                          <CommandInput
-                            placeholder="Search client..."
-                            value={clientSearch}
-                            onValueChange={setClientSearch}
-                          />
+                          <CommandInput placeholder="Search client..." value={clientSearch} onValueChange={setClientSearch} />
                           <CommandList>
-                            <CommandEmpty>
-                              {loadingClients ? "Loading..." : "No clients found."}
-                            </CommandEmpty>
+                            <CommandEmpty>{loadingClients ? "Loading..." : "No clients found."}</CommandEmpty>
                             <CommandGroup heading="Clients">
                               {clients.map((c) => (
                                 <CommandItem
@@ -484,19 +431,15 @@ export default function NewTransactionPage() {
                     <FormControl>
                       <Input
                         inputMode="decimal"
-                        placeholder="0.0000"
+                        placeholder="0.000"
                         value={String(field.value ?? "")}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          field.onChange(v === "" ? 0 : Number(v));
-                        }}
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="ratePerGram"
@@ -508,22 +451,18 @@ export default function NewTransactionPage() {
                         inputMode="decimal"
                         placeholder="0"
                         value={String(field.value ?? "")}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          field.onChange(v === "" ? 0 : Number(v));
-                        }}
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <FormItem>
                 <FormLabel>Amount THB</FormLabel>
                 <div className="rounded-md border bg-muted px-3 py-2 text-sm">
                   {formatCurrency(amount, "THB", "th-TH")}
-                  {vat > 0 ? (
+                  {!isUnofficial && vat > 0 ? (
                     <span className="ml-2 text-muted-foreground">
                       (with VAT: {formatCurrency(totalWithVat, "THB", "th-TH")})
                     </span>
@@ -532,77 +471,91 @@ export default function NewTransactionPage() {
               </FormItem>
             </div>
 
+            {/* Payment mode — official only (unofficial forced to cash) */}
+            {!isUnofficial && (
+              <FormField
+                control={form.control}
+                name="paymentMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Payment mode</FormLabel>
+                    <FormControl>
+                      <ToggleGroup
+                        type="single"
+                        value={field.value}
+                        onValueChange={(v) => v && field.onChange(v)}
+                        className="grid grid-cols-4 max-w-md"
+                      >
+                        {PAYMENT_MODES.map((m) => (
+                          <ToggleGroupItem
+                            key={m.value}
+                            value={m.value}
+                            className={cn(
+                              "py-2 text-sm",
+                              field.value === m.value ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border"
+                            )}
+                          >
+                            {m.label}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             {type === "SELL" && (
               <SellPlPreviewCard
                 weightGrams={Number.isFinite(weight) ? weight : 0}
                 ratePerGram={Number.isFinite(rate) ? rate : 0}
-                currentWac={currentWac}
-                stockGm={stockGm}
-                loading={wacLoading}
+                currentWac={bookWac?.wac ?? 0}
+                stockGm={bookWac?.stockGm ?? 0}
+                loading={!wac}
               />
             )}
 
-            <div className="grid gap-4 md:grid-cols-2">
+            {!isUnofficial && (
               <FormField
                 control={form.control}
                 name="vatPercent"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="max-w-xs">
                     <FormLabel>VAT %</FormLabel>
                     <FormControl>
                       <Input
                         inputMode="decimal"
                         value={String(field.value ?? 0)}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          field.onChange(v === "" ? 0 : Number(v));
-                        }}
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Optional..."
-                        value={field.value ?? ""}
-                        onChange={(e) => field.onChange(e.target.value)}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {previewInvoice && (
-              <div className={cn(
-                "flex items-center gap-2 rounded-md border px-3 py-2 text-xs",
-                isCash
-                  ? "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                  : invoiceDuplicate
-                  ? "border-amber-300 bg-amber-50 text-amber-800"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
-              )}>
-                <span className="font-medium">Invoice #:</span>
-                <span className="font-mono">{previewInvoice}</span>
-                {isCash && (
-                  <span className="ml-1 text-zinc-500">(auto-generated)</span>
-                )}
-                {!isCash && invoiceDuplicate && (
-                  <span className="ml-1 font-semibold text-amber-700">
-                    ⚠ This invoice number already exists — a new sequence number will be generated on save.
-                  </span>
-                )}
-              </div>
             )}
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Optional..." value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              <span>Invoice number is assigned automatically on save —</span>
+              <span className="font-mono">
+                {isUnofficial ? "PV-…" : type === "BUY" ? "IV-…" : "UP-…"}
+              </span>
+            </div>
 
             <div className="flex items-center justify-between gap-3">
               <Button variant="outline" asChild>
@@ -622,14 +575,8 @@ export default function NewTransactionPage() {
             <DialogTitle>Add new client</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">
-              Client will be created (or reused) by name.
-            </div>
-            <Input
-              value={newClientName}
-              onChange={(e) => setNewClientName(e.target.value)}
-              placeholder="Client name"
-            />
+            <div className="text-sm text-muted-foreground">Client will be created (or reused) by name.</div>
+            <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="Client name" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddClientOpen(false)}>
@@ -649,14 +596,13 @@ export default function NewTransactionPage() {
           </DialogHeader>
           <div className="space-y-2 text-sm">
             <div>
-              Type:{" "}
-              <span className="font-semibold">{pendingValues?.type ?? type}</span>
+              Book: <span className="font-semibold capitalize">{pendingValues?.book ?? book}</span>
             </div>
             <div>
-              Date:{" "}
-              <span className="font-semibold">
-                {pendingValues?.date ? format(pendingValues.date, "PPP") : "-"}
-              </span>
+              Type: <span className="font-semibold">{pendingValues?.type ?? type}</span>
+            </div>
+            <div>
+              Date: <span className="font-semibold">{pendingValues?.date ? format(pendingValues.date, "PPP") : "-"}</span>
             </div>
             <div>
               Amount: <span className="font-semibold">{formatCurrency(amount, "THB", "th-TH")}</span>
@@ -666,10 +612,7 @@ export default function NewTransactionPage() {
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={() => pendingValues && submitNow(pendingValues)}
-              disabled={!pendingValues || submitting}
-            >
+            <Button onClick={() => pendingValues && submitNow(pendingValues)} disabled={!pendingValues || submitting}>
               {submitting ? "Submitting..." : "Confirm & Create"}
             </Button>
           </DialogFooter>
@@ -678,4 +621,3 @@ export default function NewTransactionPage() {
     </PageWrapper>
   );
 }
-

@@ -31,10 +31,16 @@ export const PRIMARY_NAV: AppNavItem[] = [
     keywords: ["home", "overview", "kpi"],
   },
   {
+    href: "/transactions",
+    label: "Transactions",
+    icon: ArrowLeftRight,
+    keywords: ["buy", "sell", "official", "unofficial", "book", "vault"],
+  },
+  {
     href: "/deals",
     label: "Deals",
     icon: HandCoins,
-    keywords: ["buy", "sell", "trade", "transactions"],
+    keywords: ["buy", "sell", "trade", "paired"],
   },
   {
     href: "/invoices",
@@ -64,10 +70,16 @@ export const PRIMARY_NAV: AppNavItem[] = [
 
 export const QUICK_ACTIONS: AppNavItem[] = [
   {
+    href: "/transactions/new",
+    label: "New transaction",
+    icon: PlusCircle,
+    keywords: ["create", "buy", "sell", "official", "unofficial"],
+  },
+  {
     href: "/deals/new",
     label: "New deal",
     icon: PlusCircle,
-    keywords: ["create", "buy", "sell", "trade"],
+    keywords: ["create", "paired", "trade"],
   },
   {
     href: "/transactions/import",
