@@ -1,5 +1,13 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
+// Allow the local Supabase stack (127.0.0.1:54321 over http + ws) only in dev,
+// so browser calls to it aren't blocked by CSP. Production stays cloud-only.
+const localSupabase = isDev
+  ? " http://127.0.0.1:54321 http://localhost:54321 ws://127.0.0.1:54321 ws://localhost:54321"
+  : "";
+
 const securityHeaders = [
   { key: "X-DNS-Prefetch-Control", value: "on" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
@@ -18,8 +26,8 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      // Supabase API + realtime
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+      // Supabase API + realtime (+ local stack in dev)
+      `connect-src 'self' https://*.supabase.co wss://*.supabase.co${localSupabase}`,
       "img-src 'self' data: blob:",
       "frame-ancestors 'none'",
     ].join("; "),
