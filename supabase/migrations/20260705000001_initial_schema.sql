@@ -23,7 +23,9 @@ create table gls.clients (
   email      text,
   created_at timestamptz not null default now()
 );
-create unique index clients_name_key on gls.clients (lower(name));
+-- Lookup index (not unique — real data contains case-variant duplicate names;
+-- the app dedupes on create via /api/clients).
+create index clients_name_key on gls.clients (lower(name));
 
 -- ── Users (app profile linked to Supabase auth) ─────────────────────────────
 create table gls.users (
@@ -73,6 +75,12 @@ create table gls.transactions (
   -- Paired entry (deals folded in): a SELL may link to its paired BUY
   paired_txn_id uuid references gls.transactions(id) on delete set null,
 
+  -- Linked declaration (model B): an official entry is spawned from an
+  -- unofficial (real) trade, optionally with an adjusted rate/amount for tax.
+  -- Set on the OFFICIAL row, pointing at its unofficial source. An unofficial
+  -- row is "declared" iff some official row references it here.
+  declared_from_id uuid references gls.transactions(id) on delete set null,
+
   -- Workflow
   created_by       integer references gls.users(id),
   approved_by      integer references gls.users(id),
@@ -84,10 +92,11 @@ create table gls.transactions (
   constraint unofficial_is_cash
     check (book <> 'unofficial' or payment_mode = 'cash')
 );
-create index transactions_book_idx       on gls.transactions (book);
-create index transactions_status_idx     on gls.transactions (status);
-create index transactions_book_date_idx  on gls.transactions (book, date, created_at, id);
-create index transactions_client_idx     on gls.transactions (client_id);
+create index transactions_book_idx         on gls.transactions (book);
+create index transactions_status_idx       on gls.transactions (status);
+create index transactions_book_date_idx    on gls.transactions (book, date, created_at, id);
+create index transactions_client_idx       on gls.transactions (client_id);
+create index transactions_declared_from_idx on gls.transactions (declared_from_id);
 
 -- ── Stock adjustments — admin only, per book ────────────────────────────────
 create table gls.stock_adjustments (
@@ -138,10 +147,12 @@ create table gls.settings (
   official_low_stock_threshold_gm   numeric(14, 3) default 0,
   unofficial_low_stock_threshold_gm numeric(14, 3) default 0,
   default_vat_percent               numeric(6, 3) default 7,
-  -- Invoice prefixes (owner-configurable). Unofficial uses a distinct series.
+  -- Invoice prefixes (owner-configurable). Unofficial uses distinct series
+  -- (owner picked UB-/US-, separate buy/sell), official stays IV-/UP-.
   invoice_prefix_official_buy       text default 'IV',
   invoice_prefix_official_sell      text default 'UP',
-  invoice_prefix_unofficial         text default 'PV',
+  invoice_prefix_unofficial_buy     text default 'UB',
+  invoice_prefix_unofficial_sell    text default 'US',
   invoice_footer                    text,
   constraint settings_singleton check (id = 1)
 );
