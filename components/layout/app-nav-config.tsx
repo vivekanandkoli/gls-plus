@@ -101,8 +101,8 @@ export const QUICK_ACTIONS: AppNavItem[] = [
     keywords: ["add", "customer"],
   },
   {
-    href: "/settings/audit-log",
-    label: "Audit log",
+    href: "/settings/activity-log",
+    label: "Activity log",
     icon: ScrollText,
     keywords: ["history", "activity"],
   },
