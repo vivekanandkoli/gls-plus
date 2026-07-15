@@ -41,7 +41,7 @@ export function usePendingCount(enabled = true) {
       return;
     }
     try {
-      const res = await fetch("/api/deals/pending-count");
+      const res = await fetch("/api/transactions/pending-count");
       if (!res.ok) return;
       const data = await res.json();
       setCount(typeof data.count === "number" ? data.count : 0);

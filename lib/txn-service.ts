@@ -214,6 +214,56 @@ export async function deleteTransaction(id: string, user: AppUser): Promise<void
   });
 }
 
+export interface PairedInput {
+  book: Book;
+  date: string;
+  weightGrams: number;
+  buyClientId: string | null;
+  buyRatePerGram: number;
+  sellClientId: string | null;
+  sellRatePerGram: number;
+  paymentMode: PaymentMode;
+  notes?: string | null;
+}
+
+/**
+ * A "deal" = one BUY + one SELL of the same weight in one book, linked via
+ * paired_txn_id. Replaces the old standalone deals table.
+ */
+export async function createPairedTransactions(
+  input: PairedInput,
+  user: AppUser
+): Promise<{ buy: TxnRecord; sell: TxnRecord }> {
+  const buy = await createTransaction(
+    {
+      book: input.book,
+      date: input.date,
+      type: "BUY",
+      clientId: input.buyClientId,
+      weightGrams: input.weightGrams,
+      ratePerGram: input.buyRatePerGram,
+      paymentMode: input.paymentMode,
+      notes: input.notes,
+    },
+    user
+  );
+  const sell = await createTransaction(
+    {
+      book: input.book,
+      date: input.date,
+      type: "SELL",
+      clientId: input.sellClientId,
+      weightGrams: input.weightGrams,
+      ratePerGram: input.sellRatePerGram,
+      paymentMode: input.paymentMode,
+      notes: input.notes,
+      pairedTxnId: buy.id,
+    },
+    user
+  );
+  return { buy, sell };
+}
+
 export interface ListTxnOptions {
   book?: Book;
   status?: TxnStatus | "all";
