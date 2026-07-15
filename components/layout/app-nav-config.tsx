@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   FileText,
   HandCoins,
+  Layers,
   LayoutDashboard,
   PlusCircle,
   ScrollText,
@@ -80,6 +81,12 @@ export const QUICK_ACTIONS: AppNavItem[] = [
     label: "New deal",
     icon: PlusCircle,
     keywords: ["create", "paired", "trade"],
+  },
+  {
+    href: "/transactions/adjust",
+    label: "Stock adjustment",
+    icon: Layers,
+    keywords: ["adjust", "correction", "shrinkage", "count", "vault"],
   },
   {
     href: "/transactions/import",

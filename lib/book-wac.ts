@@ -38,7 +38,19 @@ async function fetchApprovedBookTxns(
   }));
 }
 
-/** Live WAC + stock for a book (used by dashboard + SELL preview). */
+/** Net manual stock adjustment (grams) for a book. */
+export async function fetchAdjustmentsSum(supabase: ServiceClient, book: Book): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (supabase as any)
+    .from("stock_adjustments")
+    .select("delta_gm")
+    .eq("book", book);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).reduce((s: number, r: any) => s + (Number(r.delta_gm) || 0), 0);
+}
+
+/** Live WAC + stock for a book (used by dashboard + SELL preview). Includes
+ *  manual stock adjustments (added at current WAC, so WAC is unchanged). */
 export async function currentBookWac(
   supabase: ServiceClient,
   book: Book,
@@ -46,7 +58,17 @@ export async function currentBookWac(
 ): Promise<WacInventoryState> {
   const opening = await fetchOpeningBalance(supabase, book, year);
   const txns = await fetchApprovedBookTxns(supabase, book);
-  return getCurrentWacState(txns, opening);
+  const state = getCurrentWacState(txns, opening);
+  const adj = await fetchAdjustmentsSum(supabase, book);
+  if (adj !== 0) {
+    const stockGm = Math.round((state.stockGm + adj) * 1000) / 1000;
+    return {
+      stockGm,
+      wac: state.wac,
+      stockValueThb: Math.round((state.stockValueThb + adj * state.wac) * 100) / 100,
+    };
+  }
+  return state;
 }
 
 /** Recompute the book's whole WAC chain and persist P/L on each row. */
