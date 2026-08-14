@@ -36,3 +36,9 @@ enable_signup = true
 [auth.email]
 enable_signup = true
 enable_confirmations = false
+
+# The analytics (Logflare) + vector containers frequently fail their health
+# checks on local startup and cause the whole `supabase start` to roll back.
+# The app doesn't use them, so disable analytics locally.
+[analytics]
+enabled = false
