@@ -196,6 +196,65 @@ export async function rejectTransaction(
   return data as TxnRecord;
 }
 
+export interface UpdateTxnInput {
+  date?: string;
+  clientId?: string | null;
+  weightGrams?: number;
+  ratePerGram?: number;
+  vatPercent?: number | null;
+  notes?: string | null;
+}
+
+export async function updateTransaction(
+  id: string,
+  patch: UpdateTxnInput,
+  user: AppUser
+): Promise<TxnRecord> {
+  const supabase = createSupabaseServiceClient();
+  const tx = await fetchTransaction(supabase, id);
+  if (!tx) throw new Error("Transaction not found");
+
+  const canEdit = user.role === "admin" || (tx.created_by === user.id && tx.status !== "approved");
+  if (!canEdit) throw new Error("You cannot edit this transaction");
+
+  const weight = patch.weightGrams ?? tx.weight_grams;
+  const rate = patch.ratePerGram ?? tx.rate_per_gram;
+  const amount = Math.round(weight * rate * 100) / 100;
+  // A staff edit of a rejected entry resubmits it for approval.
+  const status: TxnStatus = tx.status === "rejected" && user.role !== "admin" ? "pending" : tx.status;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("transactions")
+    .update({
+      date: patch.date ?? tx.date,
+      client_id: patch.clientId !== undefined ? patch.clientId : tx.client_id,
+      weight_grams: weight,
+      rate_per_gram: rate,
+      amount_thb: amount,
+      vat_percent: patch.vatPercent !== undefined ? patch.vatPercent : tx.vat_percent,
+      notes: patch.notes !== undefined ? patch.notes?.trim() || null : tx.notes,
+      status,
+      rejection_reason: status === "pending" ? null : tx.rejection_reason,
+    })
+    .eq("id", id)
+    .select(SELECT)
+    .single();
+  if (error) throw new Error(error.message);
+
+  if (tx.status === "approved" || status === "approved") await recalcBookWac(supabase, tx.book);
+
+  await logActivity({
+    transactionId: id,
+    action: tx.status === "rejected" ? "resubmitted" : "edited",
+    performedBy: user.id,
+    oldValues: tx as unknown as Record<string, unknown>,
+    newValues: data as Record<string, unknown>,
+  });
+
+  return data as TxnRecord;
+}
+
 export async function deleteTransaction(id: string, user: AppUser): Promise<void> {
   const supabase = createSupabaseServiceClient();
   const tx = await fetchTransaction(supabase, id);

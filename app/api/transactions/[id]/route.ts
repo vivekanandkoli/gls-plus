@@ -2,9 +2,36 @@ import { NextResponse } from "next/server";
 
 import { requireAppUser, forbidden } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
-import { fetchTransaction, deleteTransaction } from "@/lib/txn-service";
+import { fetchTransaction, deleteTransaction, updateTransaction } from "@/lib/txn-service";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+// ── PUT /api/transactions/[id] — edit (RBAC enforced in service) ──────────────
+export async function PUT(req: Request, ctx: Ctx) {
+  const user = await requireAppUser();
+  if (user instanceof NextResponse) return user;
+  try {
+    const { id } = await ctx.params;
+    const body = await req.json().catch(() => ({}));
+    const tx = await updateTransaction(
+      id,
+      {
+        date: typeof body?.date === "string" ? body.date : undefined,
+        clientId: body?.clientId === undefined ? undefined : body.clientId || null,
+        weightGrams: body?.weightGrams === undefined ? undefined : Number(body.weightGrams),
+        ratePerGram: body?.ratePerGram === undefined ? undefined : Number(body.ratePerGram),
+        vatPercent: body?.vatPercent === undefined ? undefined : body.vatPercent === null ? null : Number(body.vatPercent),
+        notes: body?.notes === undefined ? undefined : body.notes,
+      },
+      user
+    );
+    return NextResponse.json({ transaction: tx });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Update failed";
+    const status = message.includes("not found") ? 404 : message.includes("cannot edit") ? 403 : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
 
 // ── GET /api/transactions/[id] ────────────────────────────────────────────────
 export async function GET(_req: Request, ctx: Ctx) {

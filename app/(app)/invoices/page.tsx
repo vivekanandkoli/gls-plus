@@ -190,7 +190,7 @@ export default function InvoicesPage() {
         const supabase = getSupabaseClient() as any;
         const { data } = await supabase
           .from("settings")
-          .select("company_name_en,company_name_th,address_en,address_th,phone,email,tax_id,invoice_footer_note,logo_data_url")
+          .select("company_name_en:company_name,company_name_th,address_en:address_1,address_th:address_2,phone,email,tax_id,invoice_footer_note:invoice_footer,logo_data_url:logo_url")
           .limit(1)
           .maybeSingle();
         if (data) setSettings(data as Settings);
