@@ -553,7 +553,7 @@ export default function NewTransactionPage() {
             <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
               <span>Invoice number is assigned automatically on save —</span>
               <span className="font-mono">
-                {isUnofficial ? "PV-…" : type === "BUY" ? "IV-…" : "UP-…"}
+                {isUnofficial ? (type === "BUY" ? "UB-…" : "US-…") : type === "BUY" ? "IV-…" : "UP-…"}
               </span>
             </div>
 

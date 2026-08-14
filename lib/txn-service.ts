@@ -36,6 +36,7 @@ export interface TxnRecord {
   cost_of_sale: number | null;
   profit_loss: number | null;
   paired_txn_id: string | null;
+  declared_from_id: string | null;
   created_by: number | null;
   approved_by: number | null;
   approved_at: string | null;
@@ -46,7 +47,7 @@ export interface TxnRecord {
 const SELECT =
   "id,book,date,type,client_id,weight_grams,rate_per_gram,amount_thb,payment_mode," +
   "vat_percent,invoice_number,notes,status,wac_at_sale,cost_of_sale,profit_loss," +
-  "paired_txn_id,created_by,approved_by,approved_at,rejection_reason,created_at";
+  "paired_txn_id,declared_from_id,created_by,approved_by,approved_at,rejection_reason,created_at";
 
 export async function fetchTransaction(
   supabase: ServiceClient,
@@ -73,6 +74,7 @@ export interface CreateTxnInput {
   vatPercent?: number | null;
   notes?: string | null;
   pairedTxnId?: string | null;
+  declaredFromId?: string | null;
 }
 
 export async function createTransaction(
@@ -105,6 +107,7 @@ export async function createTransaction(
       invoice_number: invoice,
       notes: input.notes?.trim() || null,
       paired_txn_id: input.pairedTxnId ?? null,
+      declared_from_id: input.declaredFromId ?? null,
       status,
       created_by: user.id,
       approved_by: status === "approved" ? user.id : null,
@@ -262,6 +265,49 @@ export async function createPairedTransactions(
     user
   );
   return { buy, sell };
+}
+
+/**
+ * Model B — declare an unofficial (real) transaction to the official/tax book.
+ * Creates a LINKED official entry (same type/weight/date/client) whose
+ * declared_from_id points back to the unofficial source. The declared rate may
+ * be adjusted for tax; payment mode defaults to bank.
+ */
+export async function declareOfficially(
+  sourceId: string,
+  admin: AppUser,
+  override?: { ratePerGram?: number; vatPercent?: number | null; paymentMode?: PaymentMode }
+): Promise<TxnRecord> {
+  const supabase = createSupabaseServiceClient();
+  const src = await fetchTransaction(supabase, sourceId);
+  if (!src) throw new Error("Source transaction not found");
+  if (src.book !== "unofficial") throw new Error("Only unofficial transactions can be declared officially");
+
+  // Prevent declaring the same source twice.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (supabase as any)
+    .from("transactions")
+    .select("id")
+    .eq("declared_from_id", sourceId)
+    .limit(1)
+    .maybeSingle();
+  if (existing) throw new Error("This transaction is already declared officially");
+
+  return createTransaction(
+    {
+      book: "official",
+      date: src.date,
+      type: src.type,
+      clientId: src.client_id,
+      weightGrams: src.weight_grams,
+      ratePerGram: override?.ratePerGram ?? src.rate_per_gram,
+      paymentMode: override?.paymentMode ?? "bank",
+      vatPercent: override?.vatPercent ?? null,
+      notes: `Declared from ${src.invoice_number ?? sourceId}`,
+      declaredFromId: sourceId,
+    },
+    admin
+  );
 }
 
 export interface ListTxnOptions {

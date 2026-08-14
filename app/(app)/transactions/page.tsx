@@ -84,6 +84,28 @@ export default function TransactionsPage() {
     })();
   }, []);
 
+  async function declareOfficial(id: string) {
+    const raw = window.prompt("Declared rate per gram for the official/tax entry (blank = same as recorded):");
+    if (raw === null) return;
+    const ratePerGram = raw.trim() === "" ? null : Number(raw);
+    setBusyId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/transactions/${id}/declare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ratePerGram }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Declare failed");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Declare failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function act(id: string, action: "approve" | "reject" | "delete") {
     setBusyId(id);
     setError(null);
@@ -248,6 +270,11 @@ export default function TransactionsPage() {
                             Reject
                           </Button>
                         </>
+                      )}
+                      {isAdmin && t.book === "unofficial" && t.status === "approved" && (
+                        <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => declareOfficial(t.id)} title="Create a linked official/tax entry">
+                          Declare
+                        </Button>
                       )}
                       {isAdmin && (
                         <Button size="sm" variant="ghost" disabled={busyId === t.id} onClick={() => act(t.id, "delete")}>
