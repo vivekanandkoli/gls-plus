@@ -1,11 +1,37 @@
 /**
  * Weighted Average Cost (WAC) inventory ledger for Supabase transactions.
- * Processes all transactions in chronological order from a fixed opening balance.
+ * Processes all transactions in chronological order from an opening balance.
+ *
+ * Two-ledger model: each `book` (official | unofficial) runs its OWN WAC chain
+ * from its OWN per-year opening balance (see `opening_balances`). The engine here
+ * is book-agnostic — pass the relevant opening balance and the transactions for
+ * that book. The legacy single-ledger constants below are kept only as a default
+ * for not-yet-migrated callers.
  */
 
+/** @deprecated legacy single-ledger opening; two-ledger uses opening_balances per (year, book). */
 export const OPENING_STOCK_GM = 2331.33;
+/** @deprecated legacy single-ledger opening. */
 export const OPENING_STOCK_VALUE_THB = 6665493.2;
+/** @deprecated legacy single-ledger opening. */
 export const OPENING_WAC = 2859.09;
+
+/** Opening inventory position a WAC chain starts from (per year, per book). */
+export interface OpeningBalance {
+  stockGm: number;
+  stockValueThb: number;
+  wac: number;
+}
+
+/** A fresh book with no opening position. */
+export const ZERO_OPENING: OpeningBalance = { stockGm: 0, stockValueThb: 0, wac: 0 };
+
+/** Legacy single-ledger opening, used as the default for un-migrated callers. */
+export const LEGACY_OPENING: OpeningBalance = {
+  stockGm: OPENING_STOCK_GM,
+  stockValueThb: OPENING_STOCK_VALUE_THB,
+  wac: OPENING_WAC,
+};
 
 export type WacTxType = "BUY" | "SELL";
 
@@ -56,13 +82,16 @@ export function sortWacTransactions(transactions: WacTx[]): WacTx[] {
 }
 
 /** Walk the full chain and return P&L per transaction id. */
-export function recalculateWacPl(transactions: WacTx[]): Map<string, WacPlEntry> {
+export function recalculateWacPl(
+  transactions: WacTx[],
+  opening: OpeningBalance = LEGACY_OPENING
+): Map<string, WacPlEntry> {
   const sorted = sortWacTransactions(transactions);
   const map = new Map<string, WacPlEntry>();
 
-  let stockGm = OPENING_STOCK_GM;
-  let stockValue = OPENING_STOCK_VALUE_THB;
-  let wac = OPENING_WAC;
+  let stockGm = opening.stockGm;
+  let stockValue = opening.stockValueThb;
+  let wac = opening.wac;
 
   for (const tx of sorted) {
     const weight = tx.weightGrams;
@@ -120,12 +149,15 @@ export function recalculateWacPl(transactions: WacTx[]): Map<string, WacPlEntry>
 }
 
 /** Inventory state after processing all transactions (for SELL preview on create). */
-export function getCurrentWacState(transactions: WacTx[]): WacInventoryState {
+export function getCurrentWacState(
+  transactions: WacTx[],
+  opening: OpeningBalance = LEGACY_OPENING
+): WacInventoryState {
   const sorted = sortWacTransactions(transactions);
 
-  let stockGm = OPENING_STOCK_GM;
-  let stockValue = OPENING_STOCK_VALUE_THB;
-  let wac = OPENING_WAC;
+  let stockGm = opening.stockGm;
+  let stockValue = opening.stockValueThb;
+  let wac = opening.wac;
 
   for (const tx of sorted) {
     const weight = tx.weightGrams;

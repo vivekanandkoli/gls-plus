@@ -31,10 +31,16 @@ export const PRIMARY_NAV: AppNavItem[] = [
     keywords: ["home", "overview", "kpi"],
   },
   {
+    href: "/transactions",
+    label: "Transactions",
+    icon: ArrowLeftRight,
+    keywords: ["buy", "sell", "trade", "ledger", "official", "unofficial"],
+  },
+  {
     href: "/deals",
     label: "Deals",
     icon: HandCoins,
-    keywords: ["buy", "sell", "trade", "transactions"],
+    keywords: ["buy", "sell", "trade", "paired"],
   },
   {
     href: "/invoices",

@@ -20,8 +20,15 @@ export interface AppUser {
   createdAt: string;
 }
 
+/** Two-ledger discriminator. Unofficial = the real vault (cash-only). */
+export type Book = "official" | "unofficial";
+
+/** Payment mode. Unofficial book is constrained to `cash`. */
+export type PaymentMode = "bank" | "qr" | "cheque" | "cash";
+
 export interface TransactionRecord {
   id: string;
+  book: Book;
   client_id: string;
   date: string;
   type: "BUY" | "SELL";
@@ -29,9 +36,17 @@ export interface TransactionRecord {
   weight_grams: number | null;
   rate_per_gram: number | null;
   amount_thb: number | null;
+  payment_mode: PaymentMode;
   vat_percent: number | null;
   notes: string | null;
   status: TransactionStatus;
+  /** Persisted WAC results (SELL only, set on approval). */
+  wac_at_sale: number | null;
+  cost_of_sale: number | null;
+  profit_loss: number | null;
+  /** Linked declaration (model B): official row → its unofficial source. */
+  declared_from_id: string | null;
+  paired_txn_id: string | null;
   created_by: number | null;
   approved_by: number | null;
   approved_at: string | null;
