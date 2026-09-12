@@ -770,7 +770,7 @@ export default function SettingsPage() {
             <AlertDialogTitle>Rebuild stock ledger?</AlertDialogTitle>
             <AlertDialogDescription>
               This will delete and recompute all transaction-linked ledger rows.
-              Manual adjustments are preserved. This cannot be undone — make sure your
+              Manual adjustments are preserved. This cannot be undone - make sure your
               transactions are correct first.
             </AlertDialogDescription>
           </AlertDialogHeader>

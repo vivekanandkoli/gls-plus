@@ -144,7 +144,7 @@ function InvoicePreviewPanel({
         </div>
       </div>
 
-      {/* Live preview — scrollable */}
+      {/* Live preview - scrollable */}
       <div className="flex-1 overflow-auto bg-muted/30 p-4">
         <div
           className="mx-auto rounded-lg border shadow-sm overflow-hidden"
@@ -237,7 +237,7 @@ export default function InvoicesPage() {
 
   // When a row is clicked, fetch full detail and open preview.
   const openInvoice = useCallback(async (row: TxRow) => {
-    const clientName = embeddedClientName(row.client) ?? "—";
+    const clientName = embeddedClientName(row.client) ?? "-";
     setSelectedTx({
       id: row.id,
       date: row.date,
@@ -323,11 +323,11 @@ export default function InvoicesPage() {
                           onClick={() => openInvoice(r)}
                         >
                           <TableCell className="font-mono text-xs font-semibold">
-                            {r.invoice_number ?? "—"}
+                            {r.invoice_number ?? "-"}
                           </TableCell>
                           <TableCell className="text-sm">{r.date}</TableCell>
                           <TableCell className="text-sm truncate max-w-[140px]">
-                            {embeddedClientName(r.client) ?? "—"}
+                            {embeddedClientName(r.client) ?? "-"}
                           </TableCell>
                           <TableCell>
                             <Badge className={cn(
@@ -340,7 +340,7 @@ export default function InvoicesPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-sm">
-                            {r.amount_thb != null ? formatCurrency(r.amount_thb, "THB", "th-TH") : "—"}
+                            {r.amount_thb != null ? formatCurrency(r.amount_thb, "THB", "th-TH") : "-"}
                           </TableCell>
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             <Button

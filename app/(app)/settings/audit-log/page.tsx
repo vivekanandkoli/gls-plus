@@ -99,7 +99,7 @@ export default function AuditLogPage() {
                           {meta?.label ?? r.event_type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">{r.description ?? "—"}</TableCell>
+                      <TableCell className="text-sm">{r.description ?? "-"}</TableCell>
                     </TableRow>
                   );
                 })}

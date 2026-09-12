@@ -201,25 +201,25 @@ export function SellPlPreviewCard({
       <div className="flex items-center justify-between py-0.5">
         <span className="text-muted-foreground">Current WAC</span>
         <span className="tabular-nums font-medium">
-          {isEmpty ? "—" : `฿${formatWacRate(currentWac)} /gm`}
+          {isEmpty ? "-" : `฿${formatWacRate(currentWac)} /gm`}
         </span>
       </div>
       <div className="flex items-center justify-between py-0.5">
         <span className="text-muted-foreground">Cost of Sale</span>
         <span className="tabular-nums font-medium">
-          {isEmpty ? "—" : formatCurrency(costOfSale, "THB", "th-TH")}
+          {isEmpty ? "-" : formatCurrency(costOfSale, "THB", "th-TH")}
         </span>
       </div>
       <div className="flex items-center justify-between py-0.5">
         <span className="text-muted-foreground">Profit / Loss</span>
         <span className={cn("tabular-nums font-medium", plClass)}>
-          {isEmpty ? "—" : formatCurrency(profitLoss, "THB", "th-TH")}
+          {isEmpty ? "-" : formatCurrency(profitLoss, "THB", "th-TH")}
         </span>
       </div>
       <div className="mt-1 flex items-center justify-between border-t border-dashed pt-1.5">
         <span className="text-muted-foreground text-xs">P&amp;L %</span>
         <span className={cn("tabular-nums text-lg font-bold", plClass)}>
-          {isEmpty ? "— %" : `${arrow} ${Math.abs(plPercent).toFixed(2)}%`}
+          {isEmpty ? "- %" : `${arrow} ${Math.abs(plPercent).toFixed(2)}%`}
         </span>
       </div>
       {stockGm != null && stockGm > 0 && !isEmpty && (

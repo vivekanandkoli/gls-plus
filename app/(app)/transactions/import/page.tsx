@@ -313,7 +313,7 @@ export default function ImportPage() {
     });
 
     if (invalidAction === "abort" && errorCount > 0) {
-      return; // shouldn't reach here — button disabled
+      return; // shouldn't reach here - button disabled
     }
 
     setImportTotal(toImport.length);
@@ -345,7 +345,7 @@ export default function ImportPage() {
       return created.id;
     }
 
-    // Determine starting balance — insert opening entry when DB is empty.
+    // Determine starting balance - insert opening entry when DB is empty.
     const ledgerIsEmpty = currentSystemBalance === null;
     let runningBalance: number;
 
@@ -410,7 +410,7 @@ export default function ImportPage() {
               noteImportDate(row.dateIso);
               overwritten++;
             } else {
-              // Doesn't actually exist — treat as fresh insert.
+              // Doesn't actually exist - treat as fresh insert.
               const { data: tx, error: txErr } = await supabase
                 .from("transactions")
                 .insert({
@@ -791,7 +791,7 @@ export default function ImportPage() {
 
           {/* Opening Balance panel */}
           {currentSystemBalance === null ? (
-            /* State A — fresh import, DB is empty */
+            /* State A - fresh import, DB is empty */
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Opening Balance</CardTitle>
@@ -814,7 +814,7 @@ export default function ImportPage() {
               </CardContent>
             </Card>
           ) : Math.abs(openingBalance - currentSystemBalance) < 0.005 ? (
-            /* State B — continuation, G3 matches system balance */
+            /* State B - continuation, G3 matches system balance */
             <Card className="border-emerald-200 bg-emerald-50/50">
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-start gap-2">
@@ -832,7 +832,7 @@ export default function ImportPage() {
               </CardContent>
             </Card>
           ) : (
-            /* State C — continuation, G3 does NOT match system balance */
+            /* State C - continuation, G3 does NOT match system balance */
             <Card className="border-amber-300 bg-amber-50/50">
               <CardContent className="pt-4 pb-4 space-y-3">
                 <div className="flex items-start gap-2">
@@ -895,8 +895,8 @@ export default function ImportPage() {
                       {opt === "skip"
                         ? `Import ${validCount + (dupeAction === "skip" ? 0 : dupeCount)} valid rows; skip ${errorCount} error row${errorCount !== 1 ? "s" : ""}`
                         : errorCount > 0
-                        ? `Will NOT import — ${errorCount} error${errorCount !== 1 ? "s" : ""} must be fixed first`
-                        : "No errors detected — import will proceed normally"}
+                        ? `Will NOT import - ${errorCount} error${errorCount !== 1 ? "s" : ""} must be fixed first`
+                        : "No errors detected - import will proceed normally"}
                     </div>
                   </div>
                 </label>

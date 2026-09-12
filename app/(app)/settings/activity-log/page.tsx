@@ -90,15 +90,15 @@ export default function ActivityLogPage() {
                 </TableCell>
                 <TableCell className="capitalize">{e.action}</TableCell>
                 <TableCell className="font-mono text-xs">
-                  {e.transaction_id?.slice(0, 8) ?? "—"}
+                  {e.transaction_id?.slice(0, 8) ?? "-"}
                 </TableCell>
-                <TableCell>{e.performed_by ?? "—"}</TableCell>
+                <TableCell>{e.performed_by ?? "-"}</TableCell>
                 <TableCell className="max-w-xs truncate text-xs text-muted-foreground">
                   {e.new_values
                     ? JSON.stringify(e.new_values)
                     : e.old_values
                       ? JSON.stringify(e.old_values)
-                      : "—"}
+                      : "-"}
                 </TableCell>
               </TableRow>
             ))}

@@ -183,7 +183,7 @@ export default function ClientPLPage() {
               {totals.margin >= 0 ? "+" : ""}{formatCurrency(totals.margin, "THB", "th-TH")}
             </div>
             <div className="text-xs text-muted-foreground">
-              {totals.sellThb > 0 ? ((totals.margin / totals.sellThb) * 100).toFixed(1) + "% margin" : "—"}
+              {totals.sellThb > 0 ? ((totals.margin / totals.sellThb) * 100).toFixed(1) + "% margin" : "-"}
             </div>
           </CardContent>
         </Card>
@@ -192,7 +192,7 @@ export default function ClientPLPage() {
       {/* Table */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Per-client P/L — {periodLabel}</CardTitle>
+          <CardTitle className="text-sm">Per-client P/L - {periodLabel}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border bg-card">

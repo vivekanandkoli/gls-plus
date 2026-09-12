@@ -10,7 +10,7 @@ export async function logTransactionAudit(opts: {
 }): Promise<void> {
   const supabase = createSupabaseServiceClient();
 
-  const { error } = await supabase.from("transaction_audit_log").insert({
+  const { error } = await supabase.from("activity_log").insert({
     transaction_id: opts.transactionId,
     action: opts.action,
     performed_by: opts.performedBy,

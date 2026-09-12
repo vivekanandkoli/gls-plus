@@ -563,7 +563,7 @@ export default function EditTransactionPage() {
               </FormItem>
             </div>
 
-            {/* SELL P&L preview card — only shown for pending/rejected (can still be edited) */}
+            {/* SELL P&L preview card - only shown for pending/rejected (can still be edited) */}
             {type === "SELL" && txStatus !== "approved" && (
               <SellPlPreviewCard
                 weightGrams={Number.isFinite(weight) ? weight : 0}

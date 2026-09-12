@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { TransactionEditDialog } from "@/components/TransactionEditDialog";
 
 type BookSummary = {
   book: "official" | "unofficial";
@@ -147,6 +148,18 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // row editing (shared dialog)
+  const [editId, setEditId] = useState<string | null>(null);
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/clients/list")
+      .then((r) => r.json())
+      .then((d) => setClients(d.clients ?? []))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -167,7 +180,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [year]);
+  }, [year, nonce]);
 
   const off = data?.books.official;
   const unoff = data?.books.unofficial;
@@ -175,7 +188,7 @@ export default function DashboardPage() {
   return (
     <PageWrapper
       title="Dashboard"
-      description="Two independent ledgers — the real vault (unofficial) and the declared book (official)."
+      description="Two independent ledgers: the real vault (unofficial) and the declared book (official)."
     >
       {/* Year selector */}
       <div className="mb-5 flex items-center gap-2">
@@ -214,7 +227,7 @@ export default function DashboardPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             {unoff ? (
               <BookCard
-                title="Unofficial — Real Vault"
+                title="Unofficial - Real Vault"
                 subtitle="The truth: every real trade (cash). This is the owner's actual stock & P/L."
                 accent="bg-amber-50/60"
                 s={unoff}
@@ -222,7 +235,7 @@ export default function DashboardPage() {
             ) : null}
             {off ? (
               <BookCard
-                title="Official — Declared Book"
+                title="Official - Declared Book"
                 subtitle="The declared-for-tax view (any payment mode). For CA / audit only."
                 accent="bg-sky-50/60"
                 s={off}
@@ -234,7 +247,7 @@ export default function DashboardPage() {
           {off && unoff ? (
             <Card className="mt-4">
               <CardHeader>
-                <CardTitle className="text-sm">Reconciliation — real vs declared</CardTitle>
+                <CardTitle className="text-sm">Reconciliation - real vs declared</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -282,20 +295,24 @@ export default function DashboardPage() {
                       </TableRow>
                     ) : (
                       (data?.recent ?? []).map((t) => (
-                        <TableRow key={t.id}>
+                        <TableRow
+                          key={t.id}
+                          onClick={() => setEditId(t.id)}
+                          className="cursor-pointer hover:bg-muted/50"
+                        >
                           <TableCell className="whitespace-nowrap">{formatDate(t.date, "dd MMM yyyy")}</TableCell>
                           <TableCell>
                             <Badge variant={t.book === "unofficial" ? "secondary" : "outline"}>
                               {t.book}
                             </Badge>
                           </TableCell>
-                          <TableCell className="max-w-[160px] truncate">{t.client_name ?? "—"}</TableCell>
+                          <TableCell className="max-w-[160px] truncate">{t.client_name ?? ""}</TableCell>
                           <TableCell>
                             <span className={cn("font-medium", t.type === "BUY" ? "text-emerald-600" : "text-amber-700")}>
                               {t.type}
                             </span>
                           </TableCell>
-                          <TableCell className="font-mono text-xs">{t.invoice_number ?? "—"}</TableCell>
+                          <TableCell className="font-mono text-xs">{t.invoice_number ?? ""}</TableCell>
                           <TableCell className="text-right tabular-nums">{grams(t.weight_grams)}</TableCell>
                           <TableCell className="text-right tabular-nums">{rate(t.rate_per_gram)}</TableCell>
                           <TableCell className="text-right tabular-nums">{baht(t.amount_thb)}</TableCell>
@@ -309,6 +326,18 @@ export default function DashboardPage() {
           </Card>
         </>
       )}
+
+      {editId ? (
+        <TransactionEditDialog
+          id={editId}
+          clients={clients}
+          onClose={() => setEditId(null)}
+          onSaved={() => {
+            setEditId(null);
+            setNonce((n) => n + 1);
+          }}
+        />
+      ) : null}
     </PageWrapper>
   );
 }

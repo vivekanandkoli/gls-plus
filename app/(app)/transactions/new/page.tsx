@@ -301,7 +301,7 @@ export default function NewTransactionPage() {
             })}
             className="space-y-6"
           >
-            {/* Cash / Official mode toggle — admin only */}
+            {/* Cash / Official mode toggle - admin only */}
             {isAdmin && (
               <FormField
                 control={form.control}
@@ -598,7 +598,7 @@ export default function NewTransactionPage() {
                 )}
                 {!isCash && invoiceDuplicate && (
                   <span className="ml-1 font-semibold text-amber-700">
-                    ⚠ This invoice number already exists — a new sequence number will be generated on save.
+                    ⚠ This invoice number already exists - a new sequence number will be generated on save.
                   </span>
                 )}
               </div>

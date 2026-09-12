@@ -363,7 +363,7 @@ export default function NewDealPage() {
           <div className="mb-4 flex items-center gap-2 rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
             <span className="text-base">💰</span>
             <span>
-              Cash deal — will <strong>not</strong> appear in official statements, CA reports,
+              Cash deal - will <strong>not</strong> appear in official statements, CA reports,
               or WAC calculations.
             </span>
           </div>
@@ -465,7 +465,7 @@ export default function NewDealPage() {
                   name="buyRate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Buy Rate (THB/gm) — private</FormLabel>
+                      <FormLabel>Buy Rate (THB/gm) - private</FormLabel>
                       <FormControl>
                         <Input
                           inputMode="decimal"

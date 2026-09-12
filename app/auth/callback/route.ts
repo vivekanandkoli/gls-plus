@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 /**
- * Supabase Auth callback — exchanges an auth code (e.g. OAuth or email link) for a session.
+ * Supabase Auth callback - exchanges an auth code (e.g. OAuth or email link) for a session.
  * Password sign-in sets the session in the browser and does not use this route.
  */
 export async function GET(request: Request) {

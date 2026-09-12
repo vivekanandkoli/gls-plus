@@ -203,11 +203,11 @@ export default function LoginPage() {
             </p>
             <ul className="mt-2 list-disc pl-4 space-y-0.5">
               <li>
-                <strong className="text-foreground">Admin</strong> — {DEMO_ADMIN.email} /{" "}
+                <strong className="text-foreground">Admin</strong> - {DEMO_ADMIN.email} /{" "}
                 <span className="font-mono text-[11px]">{DEMO_ADMIN.password}</span>
               </li>
               <li>
-                <strong className="text-foreground">User</strong> — {DEMO_USER.email} /{" "}
+                <strong className="text-foreground">User</strong> - {DEMO_USER.email} /{" "}
                 <span className="font-mono text-[11px]">{DEMO_USER.password}</span>
               </li>
             </ul>

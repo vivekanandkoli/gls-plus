@@ -296,40 +296,40 @@ export default function DealsPage() {
                     return (
                       <TableRow key={d.id} className="hover:bg-muted/30">
                         <TableCell className="font-medium whitespace-nowrap">{d.date}</TableCell>
-                        <TableCell>{d.sell_client?.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
-                        <TableCell>{d.buy_client?.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                        <TableCell>{d.sell_client?.name ?? <span className="text-muted-foreground">-</span>}</TableCell>
+                        <TableCell>{d.buy_client?.name ?? <span className="text-muted-foreground">-</span>}</TableCell>
                         <TableCell className="text-right font-mono">
                           {typeof d.weight_gm === "number"
                             ? d.weight_gm.toLocaleString(undefined, { minimumFractionDigits: 3 })
-                            : "—"}
+                            : "-"}
                         </TableCell>
 
                         {isAdmin && (
                           <TableCell className="text-right font-mono text-xs text-muted-foreground">
                             {typeof d.buy_rate === "number"
                               ? d.buy_rate.toLocaleString(undefined, { minimumFractionDigits: 2 })
-                              : "—"}
+                              : "-"}
                           </TableCell>
                         )}
 
                         <TableCell className="text-right font-mono">
                           {typeof d.sell_rate === "number"
                             ? d.sell_rate.toLocaleString(undefined, { minimumFractionDigits: 2 })
-                            : "—"}
+                            : "-"}
                         </TableCell>
 
                         {isAdmin && (
                           <TableCell className="text-right font-mono text-xs">
                             {spread !== null
                               ? spread.toLocaleString(undefined, { minimumFractionDigits: 2 })
-                              : "—"}
+                              : "-"}
                           </TableCell>
                         )}
 
                         <TableCell className="text-right font-mono">
                           {typeof d.sell_amount === "number"
                             ? formatCurrency(d.sell_amount, "THB", "th-TH")
-                            : "—"}
+                            : "-"}
                         </TableCell>
 
                         {isAdmin && (

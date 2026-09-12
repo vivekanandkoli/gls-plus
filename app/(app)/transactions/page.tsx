@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { TransactionEditDialog } from "@/components/TransactionEditDialog";
 
 type Row = {
   id: string;
@@ -35,9 +36,9 @@ type Resp = { rows: Row[]; total: number; page: number; pageSize: number; years:
 
 const baht = (n: number | null | undefined) => formatCurrency(Number(n) || 0, "THB", "th-TH");
 const grams = (n: number | null | undefined) =>
-  n == null ? "—" : `${Number(n).toLocaleString(undefined, { maximumFractionDigits: 3 })} g`;
+  n == null ? "" : `${Number(n).toLocaleString(undefined, { maximumFractionDigits: 3 })} g`;
 const rate = (n: number | null | undefined) =>
-  n == null ? "—" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  n == null ? "" : Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 const PAGE_SIZE = 50;
 
@@ -80,6 +81,19 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // row editing
+  const [editId, setEditId] = useState<string | null>(null);
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [nonce, setNonce] = useState(0);
+
+  // load clients once (for the edit dialog's picker)
+  useEffect(() => {
+    fetch("/api/clients/list")
+      .then((r) => r.json())
+      .then((d) => setClients(d.clients ?? []))
+      .catch(() => {});
+  }, []);
+
   // debounce search
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q), 300);
@@ -112,7 +126,7 @@ export default function TransactionsPage() {
     return () => {
       active = false;
     };
-  }, [book, type, year, qDebounced, page]);
+  }, [book, type, year, qDebounced, page, nonce]);
 
   useEffect(() => {
     const cleanup = load();
@@ -126,7 +140,7 @@ export default function TransactionsPage() {
   const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   return (
-    <PageWrapper title="Transactions" description="Browse both ledgers — official (declared) and unofficial (real vault).">
+    <PageWrapper title="Transactions" description="Browse both ledgers: official (declared) and unofficial (real vault).">
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Segmented
@@ -206,18 +220,22 @@ export default function TransactionsPage() {
                   </TableRow>
                 ) : (
                   rows.map((r) => (
-                    <TableRow key={r.id}>
+                    <TableRow
+                      key={r.id}
+                      onClick={() => setEditId(r.id)}
+                      className="cursor-pointer hover:bg-muted/50"
+                    >
                       <TableCell className="whitespace-nowrap">{formatDate(r.date, "dd MMM yyyy")}</TableCell>
                       <TableCell>
                         <Badge variant={r.book === "unofficial" ? "secondary" : "outline"}>{r.book}</Badge>
                       </TableCell>
-                      <TableCell className="max-w-[160px] truncate">{r.client_name ?? "—"}</TableCell>
+                      <TableCell className="max-w-[160px] truncate">{r.client_name ?? ""}</TableCell>
                       <TableCell>
                         <span className={cn("font-medium", r.type === "BUY" ? "text-emerald-600" : "text-amber-700")}>
                           {r.type}
                         </span>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{r.invoice_number ?? "—"}</TableCell>
+                      <TableCell className="font-mono text-xs">{r.invoice_number ?? ""}</TableCell>
                       <TableCell className="text-right tabular-nums">{grams(r.weight_grams)}</TableCell>
                       <TableCell className="text-right tabular-nums">{rate(r.rate_per_gram)}</TableCell>
                       <TableCell className="text-right tabular-nums">{baht(r.amount_thb)}</TableCell>
@@ -227,7 +245,7 @@ export default function TransactionsPage() {
                           r.profit_loss != null && (r.profit_loss >= 0 ? "text-emerald-600" : "text-red-600")
                         )}
                       >
-                        {r.type === "SELL" && r.profit_loss != null ? baht(r.profit_loss) : "—"}
+                        {r.type === "SELL" && r.profit_loss != null ? baht(r.profit_loss) : ""}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -272,6 +290,18 @@ export default function TransactionsPage() {
           </button>
         </div>
       </div>
+
+      {editId ? (
+        <TransactionEditDialog
+          id={editId}
+          clients={clients}
+          onClose={() => setEditId(null)}
+          onSaved={() => {
+            setEditId(null);
+            setNonce((n) => n + 1);
+          }}
+        />
+      ) : null}
     </PageWrapper>
   );
 }

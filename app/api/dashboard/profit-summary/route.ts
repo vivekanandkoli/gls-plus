@@ -76,10 +76,10 @@ export async function GET() {
       trading_profit: {
         value: Math.round(tradingProfit * 100) / 100,
         label: "Trading Profit (Private)",
-        note: "All deals — cash + non-cash",
+        note: "All deals - cash + non-cash",
       },
 
-      // Profit 2: CA/tax profit — non-cash only, owner-rate closing
+      // Profit 2: CA/tax profit - non-cash only, owner-rate closing
       tax_profit: {
         value: Math.round(taxProfitOwnerMethod * 100) / 100,
         label: "Tax Profit (Official)",

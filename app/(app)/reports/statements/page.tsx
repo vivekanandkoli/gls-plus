@@ -52,7 +52,7 @@ const rate = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 function PnlCell({ value }: { value: number | null }) {
-  if (value == null) return <span className="text-muted-foreground">—</span>;
+  if (value == null) return <span className="text-muted-foreground">-</span>;
   const positive = value >= 0;
   return (
     <span
@@ -113,7 +113,7 @@ function TxTable({ rows }: { rows: StatementRow[] }) {
             rows.map((r) => (
               <TableRow key={r.id}>
                 <TableCell className="font-medium">{r.date}</TableCell>
-                <TableCell className="font-mono">{r.invoiceNumber ?? "—"}</TableCell>
+                <TableCell className="font-mono">{r.invoiceNumber ?? "-"}</TableCell>
                 <TableCell>{r.clientName}</TableCell>
                 <TableCell>
                   <span
@@ -131,13 +131,13 @@ function TxTable({ rows }: { rows: StatementRow[] }) {
                 <TableCell className="text-right tabular-nums">{rate(r.ratePerGram)}</TableCell>
                 <TableCell className="text-right tabular-nums">{thb(r.amountThb)}</TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {r.type === "SELL" && r.wacAtSale != null ? rate(r.wacAtSale) : "—"}
+                  {r.type === "SELL" && r.wacAtSale != null ? rate(r.wacAtSale) : "-"}
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {r.type === "SELL" && r.costOfSale != null ? thb(r.costOfSale) : "—"}
+                  {r.type === "SELL" && r.costOfSale != null ? thb(r.costOfSale) : "-"}
                 </TableCell>
                 <TableCell className="text-right">
-                  {r.type === "SELL" ? <PnlCell value={r.profitLoss} /> : "—"}
+                  {r.type === "SELL" ? <PnlCell value={r.profitLoss} /> : "-"}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{grams(r.runningStockGrams)}</TableCell>
               </TableRow>
@@ -427,7 +427,7 @@ function OverallTab() {
                   value={
                     data.summary.grossMarginPct != null
                       ? `${data.summary.grossMarginPct.toFixed(2)}%`
-                      : "—"
+                      : "-"
                   }
                   sub="P&L ÷ Sell value"
                 />
@@ -689,7 +689,7 @@ function ClientTab() {
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">
-              {data.clientName} — {data.from} to {data.to}
+              {data.clientName} - {data.from} to {data.to}
             </h2>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={exportExcel}>
@@ -705,7 +705,7 @@ function ClientTab() {
 
           <div ref={printRef} className="print-statement space-y-6">
             <PrintHeader
-              title={`Client Statement — ${data.clientName}`}
+              title={`Client Statement - ${data.clientName}`}
               subtitle={`${data.from} to ${data.to}`}
               generatedAt={data.generatedAt}
             />
@@ -732,7 +732,7 @@ function ClientTab() {
                   value={
                     data.summary.avgRate != null
                       ? rate(data.summary.avgRate)
-                      : "—"
+                      : "-"
                   }
                   sub="Across all transactions"
                 />
@@ -810,7 +810,7 @@ function AnnualTab() {
     // Find January opening: state before first day of year
     // Approximate: use the yearEndStock of previous year isn't available, use first month's prior data
     const ws2 = XLSX.utils.aoa_to_sheet([
-      [`GLS+ Annual Profit Formula — ${data.year}`],
+      [`GLS+ Annual Profit Formula - ${data.year}`],
       [],
       ["Total SELL Revenue (฿)", data.totals.sellValue],
       ["Total BUY Cost (฿)", data.totals.buyValue],
@@ -888,7 +888,7 @@ function AnnualTab() {
 
           <div ref={printRef} className="print-statement space-y-6">
             <PrintHeader
-              title={`Annual Summary — ${data.year}`}
+              title={`Annual Summary - ${data.year}`}
               subtitle="Month-by-month breakdown"
               generatedAt={data.generatedAt}
             />
@@ -916,22 +916,22 @@ function AnnualTab() {
                         {MONTH_NAMES[m.month - 1]}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {m.buyQty > 0 ? grams(m.buyQty) : "—"}
+                        {m.buyQty > 0 ? grams(m.buyQty) : "-"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {m.buyValue > 0 ? thb(m.buyValue) : "—"}
+                        {m.buyValue > 0 ? thb(m.buyValue) : "-"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {m.sellQty > 0 ? grams(m.sellQty) : "—"}
+                        {m.sellQty > 0 ? grams(m.sellQty) : "-"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {m.sellValue > 0 ? thb(m.sellValue) : "—"}
+                        {m.sellValue > 0 ? thb(m.sellValue) : "-"}
                       </TableCell>
                       <TableCell className="text-right">
                         {m.sellQty > 0 ? (
                           <PnlCell value={m.profitLoss} />
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">

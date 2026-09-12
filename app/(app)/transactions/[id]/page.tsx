@@ -152,7 +152,7 @@ export default function TransactionDetailPage() {
         {/* ── Header row: invoice + badges ── */}
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1.5">
-            {/* Invoice number — admin can inline-edit */}
+            {/* Invoice number - admin can inline-edit */}
             <div className="flex items-center gap-2">
               {invoiceEditing && isAdmin ? (
                 <div className="space-y-1">

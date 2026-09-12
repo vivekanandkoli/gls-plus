@@ -14,7 +14,7 @@ import {
 
 const SELECT = `
   id, date, created_at, type, invoice_number, weight_grams, rate_per_gram,
-  amount_thb, transaction_mode, wac_at_sale, cost_of_sale, profit_loss, pl_percent, client_id,
+  amount_thb, book, wac_at_sale, cost_of_sale, profit_loss, client_id,
   client:clients(name)
 `.replace(/\s+/g, " ").trim();
 
@@ -38,12 +38,12 @@ export async function GET(req: Request) {
   try {
     const supabase = createSupabaseServiceClient() as any;
 
-    // Fetch OFFICIAL approved transactions only — cash excluded from CA statements
+    // Fetch OFFICIAL approved transactions only - cash excluded from CA statements
     const { data: all, error } = await supabase
       .from("transactions")
       .select(SELECT)
       .eq("status", "approved")
-      .neq("transaction_mode", "cash")
+      .eq("book", "official")
       .order("date", { ascending: true })
       .order("created_at", { ascending: true });
 

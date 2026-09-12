@@ -32,7 +32,7 @@ export function Sidebar() {
         className="flex items-center gap-3.5 px-5 py-4"
         style={{ borderBottom: "1px solid var(--sidebar-border)" }}
       >
-        {/* Icon mark — transparent bg, glows on dark */}
+        {/* Icon mark - transparent bg, glows on dark */}
         <div className="shrink-0 relative">
           <Image
             src="/logo-gls-transparent.png"
@@ -114,7 +114,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer — tagline + sign-out */}
+      {/* Footer - tagline + sign-out */}
       <div
         className="px-4 py-3 flex items-center justify-between"
         style={{ borderTop: "1px solid var(--sidebar-border)" }}

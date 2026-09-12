@@ -139,7 +139,7 @@ export default function CashReportPage() {
   return (
     <PageWrapper
       title="💰 Cash Report"
-      description="Internal cash-only transactions — not included in official statements or CA reports."
+      description="Internal cash-only transactions - not included in official statements or CA reports."
     >
       {/* Filters */}
       <div className="mb-6 flex flex-wrap items-end gap-3">
@@ -243,7 +243,7 @@ export default function CashReportPage() {
                         {format(parseISO(r.date), "dd MMM yyyy")}
                       </TableCell>
                       <TableCell className="font-mono text-xs">{r.invoice_number}</TableCell>
-                      <TableCell className="text-sm">{r.client_name ?? "—"}</TableCell>
+                      <TableCell className="text-sm">{r.client_name ?? "-"}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="border-zinc-300 bg-zinc-100 text-zinc-600 text-[10px] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
                           💰 CASH {r.type}

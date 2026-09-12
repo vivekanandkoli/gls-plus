@@ -158,7 +158,7 @@ export default function StockMovementReportPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Current Balance"
-          value={stats.current ? `${stats.current.balance_grams.toLocaleString()} g` : "—"}
+          value={stats.current ? `${stats.current.balance_grams.toLocaleString()} g` : "-"}
           sub={stats.current ? `as of ${stats.current.date}` : ""}
           className="border-l-amber-500 bg-amber-50/60 dark:bg-amber-950/20"
         />
@@ -170,13 +170,13 @@ export default function StockMovementReportPage() {
         />
         <KpiCard
           label="Peak Balance"
-          value={stats.max ? `${stats.max.balance_grams.toLocaleString()} g` : "—"}
+          value={stats.max ? `${stats.max.balance_grams.toLocaleString()} g` : "-"}
           sub={stats.max ? `on ${stats.max.date}` : ""}
           className="border-l-blue-500 bg-blue-50/60 dark:bg-blue-950/20"
         />
         <KpiCard
           label="Lowest Balance"
-          value={stats.min ? `${stats.min.balance_grams.toLocaleString()} g` : "—"}
+          value={stats.min ? `${stats.min.balance_grams.toLocaleString()} g` : "-"}
           sub={stats.min ? `on ${stats.min.date}` : ""}
           className="border-l-rose-500 bg-rose-50/60 dark:bg-rose-950/20"
         />
@@ -270,7 +270,7 @@ export default function StockMovementReportPage() {
                       </TableCell>
                       <TableCell className="text-right font-mono">{r.balance_grams.toLocaleString()}</TableCell>
                       <TableCell className={cn("text-right text-xs font-mono", vsPeak < 0 ? "text-muted-foreground" : "text-blue-600 dark:text-blue-400")}>
-                        {vsPeak === 0 ? "—" : `${vsPeak.toLocaleString()} g`}
+                        {vsPeak === 0 ? "-" : `${vsPeak.toLocaleString()} g`}
                       </TableCell>
                     </TableRow>
                   );

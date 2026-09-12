@@ -305,7 +305,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             <CardTitle className="text-sm">Avg Buy Rate</CardTitle>
           </CardHeader>
           <CardContent className="pb-4">
-            <div className="text-2xl font-semibold">{stats.avgBuyRate ? stats.avgBuyRate.toFixed(2) : "—"}</div>
+            <div className="text-2xl font-semibold">{stats.avgBuyRate ? stats.avgBuyRate.toFixed(2) : "-"}</div>
             <div className="text-xs text-muted-foreground">THB/g</div>
           </CardContent>
         </Card>
@@ -314,7 +314,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             <CardTitle className="text-sm">Avg Sell Rate</CardTitle>
           </CardHeader>
           <CardContent className="pb-4">
-            <div className="text-2xl font-semibold">{stats.avgSellRate ? stats.avgSellRate.toFixed(2) : "—"}</div>
+            <div className="text-2xl font-semibold">{stats.avgSellRate ? stats.avgSellRate.toFixed(2) : "-"}</div>
             <div className="text-xs text-muted-foreground">THB/g</div>
           </CardContent>
         </Card>

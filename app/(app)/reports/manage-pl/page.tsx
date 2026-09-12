@@ -253,7 +253,7 @@ export default function ManagePlPage() {
   return (
     <PageWrapper
       title="Manage P/L"
-      description="Import, filter, edit, and add transactions — profit updates automatically."
+      description="Import, filter, edit, and add transactions - profit updates automatically."
     >
       <Card className="mb-6">
         <CardHeader className="pb-3">
@@ -552,7 +552,7 @@ export default function ManagePlPage() {
                           <TypeBadge type={r.type} />
                         </TableCell>
                         <TableCell className="max-w-[120px] truncate text-xs">
-                          {r.invoice || "—"}
+                          {r.invoice || "-"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {r.weightGrams.toFixed(2)}
@@ -563,10 +563,10 @@ export default function ManagePlPage() {
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {r.avgBuyRate !== null
                             ? r.avgBuyRate.toFixed(4)
-                            : "—"}
+                            : "-"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">
-                          {r.costOfSale !== null ? fmtThb(r.costOfSale) : "—"}
+                          {r.costOfSale !== null ? fmtThb(r.costOfSale) : "-"}
                         </TableCell>
                         <TableCell
                           className={cn(
@@ -588,13 +588,13 @@ export default function ManagePlPage() {
                               {fmtThb(r.profit)}
                             </span>
                           ) : (
-                            "—"
+                            "-"
                           )}
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {r.runningStockGrams !== null
                             ? r.runningStockGrams.toFixed(3)
-                            : "—"}
+                            : "-"}
                         </TableCell>
                         <TableCell>
                           <Button

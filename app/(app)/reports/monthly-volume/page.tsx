@@ -214,7 +214,7 @@ export default function MonthlyVolumeReportPage() {
         />
         <KpiCard
           label="Peak Month"
-          value={peakMonth ? peakMonth.month.slice(5) : "—"}
+          value={peakMonth ? peakMonth.month.slice(5) : "-"}
           sub={peakMonth ? `${(peakMonth.buy_g + peakMonth.sell_g).toLocaleString()} g total volume` : ""}
           className="border-l-violet-500 bg-violet-50/60 dark:bg-violet-950/20"
         />
@@ -224,7 +224,7 @@ export default function MonthlyVolumeReportPage() {
       <Card className="mt-6">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">
-            BUY vs SELL grams — {year}{compareYear ? ` vs ${compareYear}` : ""}
+            BUY vs SELL grams - {year}{compareYear ? ` vs ${compareYear}` : ""}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -256,7 +256,7 @@ export default function MonthlyVolumeReportPage() {
       {/* Table */}
       <Card className="mt-6">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Monthly breakdown — {year}</CardTitle>
+          <CardTitle className="text-sm">Monthly breakdown - {year}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border bg-card">

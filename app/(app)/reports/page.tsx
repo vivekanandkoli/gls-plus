@@ -19,7 +19,7 @@ const publicReportLinks = [
   {
     href: "/reports/top-buyers",
     label: "Top Clients",
-    desc: "Ranked by volume sold — identify your highest-value relationships",
+    desc: "Ranked by volume sold - identify your highest-value relationships",
     icon: Users,
     gradient: "from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20",
     accent: "border-l-amber-500",
@@ -39,7 +39,7 @@ const publicReportLinks = [
   {
     href: "/reports/monthly-volume",
     label: "Monthly Volume",
-    desc: "BUY vs SELL grams per month — spot seasonal trends at a glance",
+    desc: "BUY vs SELL grams per month - spot seasonal trends at a glance",
     icon: BarChart3,
     gradient: "from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20",
     accent: "border-l-emerald-500",
@@ -49,7 +49,7 @@ const publicReportLinks = [
   {
     href: "/reports/stock-movement",
     label: "Stock Movement",
-    desc: "Running balance over time — track highs, lows and inventory health",
+    desc: "Running balance over time - track highs, lows and inventory health",
     icon: Layers,
     gradient: "from-yellow-50 to-amber-50 dark:from-yellow-950/30 dark:to-amber-950/20",
     accent: "border-l-yellow-500",
@@ -59,7 +59,7 @@ const publicReportLinks = [
   {
     href: "/reports/client-pl",
     label: "Client P/L",
-    desc: "Net grams and THB per client — who's profitable, who needs attention",
+    desc: "Net grams and THB per client - who's profitable, who needs attention",
     icon: Wallet,
     gradient: "from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20",
     accent: "border-l-violet-500",
@@ -69,7 +69,7 @@ const publicReportLinks = [
   {
     href: "/reports/manage-pl",
     label: "Manage P/L",
-    desc: "Import P/L workbook — per-transaction profit and overall year-end profit",
+    desc: "Import P/L workbook - per-transaction profit and overall year-end profit",
     icon: Calculator,
     gradient: "from-cyan-50 to-sky-50 dark:from-cyan-950/30 dark:to-sky-950/20",
     accent: "border-l-cyan-500",
@@ -79,7 +79,7 @@ const publicReportLinks = [
   {
     href: "/reports/revenue",
     label: "Revenue & Margin",
-    desc: "SELL revenue vs BUY cost — gross margin and monthly P&L breakdown",
+    desc: "SELL revenue vs BUY cost - gross margin and monthly P&L breakdown",
     icon: TrendingUp,
     gradient: "from-rose-50 to-pink-50 dark:from-rose-950/30 dark:to-pink-950/20",
     accent: "border-l-rose-500",
@@ -89,7 +89,7 @@ const publicReportLinks = [
   {
     href: "/reports/statements",
     label: "Statements",
-    desc: "Monthly, client-wise & annual statements — export as PDF or Excel for CA",
+    desc: "Monthly, client-wise & annual statements - export as PDF or Excel for CA",
     icon: FileText,
     gradient: "from-slate-50 to-zinc-50 dark:from-slate-950/30 dark:to-zinc-950/20",
     accent: "border-l-slate-500",
@@ -102,7 +102,7 @@ const adminOnlyLinks = [
   {
     href: "/reports/cash",
     label: "💰 Cash Report",
-    desc: "Internal cash-only transactions — P&L, stock, and client breakdown (admin only)",
+    desc: "Internal cash-only transactions - P&L, stock, and client breakdown (admin only)",
     icon: Banknote,
     gradient: "from-zinc-50 to-zinc-100 dark:from-zinc-950/30 dark:to-zinc-900/20",
     accent: "border-l-zinc-400",

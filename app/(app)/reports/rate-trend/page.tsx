@@ -184,20 +184,20 @@ export default function RateTrendReportPage() {
         {loading && <span className="text-xs text-muted-foreground mt-5">Loading…</span>}
       </div>
 
-      {/* KPI cards — 7 stats */}
+      {/* KPI cards - 7 stats */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
-        <StatCard label="BUY min" value={stats.buyMin ? stats.buyMin.toFixed(2) : "—"} sub="THB/g" className="border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/20" />
-        <StatCard label="BUY avg" value={stats.buyAvg ? stats.buyAvg.toFixed(2) : "—"} sub="THB/g" className="border-l-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/10" />
-        <StatCard label="BUY max" value={stats.buyMax ? stats.buyMax.toFixed(2) : "—"} sub="THB/g" className="border-l-emerald-300 bg-emerald-50/20 dark:bg-emerald-950/5" />
+        <StatCard label="BUY min" value={stats.buyMin ? stats.buyMin.toFixed(2) : "-"} sub="THB/g" className="border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/20" />
+        <StatCard label="BUY avg" value={stats.buyAvg ? stats.buyAvg.toFixed(2) : "-"} sub="THB/g" className="border-l-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/10" />
+        <StatCard label="BUY max" value={stats.buyMax ? stats.buyMax.toFixed(2) : "-"} sub="THB/g" className="border-l-emerald-300 bg-emerald-50/20 dark:bg-emerald-950/5" />
         <StatCard
           label="Spread"
-          value={stats.spread ? `${stats.spread > 0 ? "+" : ""}${stats.spread.toFixed(2)}` : "—"}
+          value={stats.spread ? `${stats.spread > 0 ? "+" : ""}${stats.spread.toFixed(2)}` : "-"}
           sub="SELL avg − BUY avg"
           className={cn("border-l-4", stats.spread >= 0 ? "border-l-blue-500 bg-blue-50/60 dark:bg-blue-950/20" : "border-l-red-500 bg-red-50/60")}
         />
-        <StatCard label="SELL min" value={stats.sellMin ? stats.sellMin.toFixed(2) : "—"} sub="THB/g" className="border-l-amber-300 bg-amber-50/20 dark:bg-amber-950/5" />
-        <StatCard label="SELL avg" value={stats.sellAvg ? stats.sellAvg.toFixed(2) : "—"} sub="THB/g" className="border-l-amber-400 bg-amber-50/40 dark:bg-amber-950/10" />
-        <StatCard label="SELL max" value={stats.sellMax ? stats.sellMax.toFixed(2) : "—"} sub="THB/g" className="border-l-amber-500 bg-amber-50/60 dark:bg-amber-950/20" />
+        <StatCard label="SELL min" value={stats.sellMin ? stats.sellMin.toFixed(2) : "-"} sub="THB/g" className="border-l-amber-300 bg-amber-50/20 dark:bg-amber-950/5" />
+        <StatCard label="SELL avg" value={stats.sellAvg ? stats.sellAvg.toFixed(2) : "-"} sub="THB/g" className="border-l-amber-400 bg-amber-50/40 dark:bg-amber-950/10" />
+        <StatCard label="SELL max" value={stats.sellMax ? stats.sellMax.toFixed(2) : "-"} sub="THB/g" className="border-l-amber-500 bg-amber-50/60 dark:bg-amber-950/20" />
       </div>
 
       {/* Chart */}
@@ -214,7 +214,7 @@ export default function RateTrendReportPage() {
                 <YAxis tick={{ fontSize: 11 }} domain={["auto", "auto"]} />
                 <Tooltip
                   formatter={(value: any, name: any) =>
-                    value != null ? [`${Number(value).toFixed(2)} THB/g`, name] : ["—", name]
+                    value != null ? [`${Number(value).toFixed(2)} THB/g`, name] : ["-", name]
                   }
                 />
                 <Legend />
@@ -255,16 +255,16 @@ export default function RateTrendReportPage() {
                     <TableRow key={r.date}>
                       <TableCell className="font-medium">{r.date}</TableCell>
                       <TableCell className="text-right text-emerald-700 dark:text-emerald-400">
-                        {r.buyRate !== null ? r.buyRate.toFixed(2) : "—"}
+                        {r.buyRate !== null ? r.buyRate.toFixed(2) : "-"}
                       </TableCell>
                       <TableCell className="text-right text-amber-700 dark:text-amber-400">
-                        {r.sellRate !== null ? r.sellRate.toFixed(2) : "—"}
+                        {r.sellRate !== null ? r.sellRate.toFixed(2) : "-"}
                       </TableCell>
                       <TableCell className={cn(
                         "text-right font-medium",
                         spread === null ? "text-muted-foreground" : spread >= 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600"
                       )}>
-                        {spread !== null ? (spread >= 0 ? "+" : "") + spread.toFixed(2) : "—"}
+                        {spread !== null ? (spread >= 0 ? "+" : "") + spread.toFixed(2) : "-"}
                       </TableCell>
                     </TableRow>
                   );

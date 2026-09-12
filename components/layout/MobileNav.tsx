@@ -30,7 +30,7 @@ export function MobileNav() {
 
   return (
     <>
-      {/* Hamburger bar — only visible on mobile */}
+      {/* Hamburger bar - only visible on mobile */}
       <header
         className="md:hidden sticky top-0 z-30 flex h-14 items-center justify-between px-4 border-b backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/90"
         style={{ background: "var(--sidebar)", borderColor: "var(--sidebar-border)" }}
@@ -147,7 +147,7 @@ export function MobileNav() {
           })}
         </div>
 
-        {/* Footer — sign-out */}
+        {/* Footer - sign-out */}
         <div
           className="px-4 py-3 flex items-center justify-between"
           style={{ borderTop: "1px solid var(--sidebar-border)" }}

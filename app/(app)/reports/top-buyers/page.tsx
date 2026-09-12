@@ -130,7 +130,7 @@ export default function TopBuyersPage() {
   return (
     <PageWrapper
       title="Top Clients"
-      description="Clients ranked by activity—volume, frequency, or value."
+      description="Clients ranked by activity-volume, frequency, or value."
     >
       <div className="no-print mb-6 flex flex-wrap items-end gap-4">
         <div>
@@ -163,7 +163,7 @@ export default function TopBuyersPage() {
       {/* Top 10 bar chart */}
       <Card className="mb-6">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Top 10 clients — {periodLabel}</CardTitle>
+          <CardTitle className="text-sm">Top 10 clients - {periodLabel}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-64 w-full">
@@ -183,7 +183,7 @@ export default function TopBuyersPage() {
       {/* Full ranked table */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">All clients ranked — {periodLabel}</CardTitle>
+          <CardTitle className="text-sm">All clients ranked - {periodLabel}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border bg-card">

@@ -64,7 +64,7 @@ function amountInWords(amount: number): string {
 }
 
 function fmtNum(n: number | null | undefined, decimals = 2): string {
-  if (n == null) return "—";
+  if (n == null) return "-";
   return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
@@ -258,7 +258,7 @@ export function InvoiceDocument({ tx, settings }: { tx: TxDetail; settings: Sett
         <div style={{ minWidth: "180px" }}>
           <div style={s.infoGrid}>
             <span style={s.labelSmall}>เลขที่ / Invoice No:</span>
-            <span style={{ ...s.fieldValueMono, color: "#b8860b" }}>{tx.invoice_number ?? "—"}</span>
+            <span style={{ ...s.fieldValueMono, color: "#b8860b" }}>{tx.invoice_number ?? "-"}</span>
             <span style={s.labelSmall}>วันที่ / Date:</span>
             <span style={s.fieldValue}>{formatDate(tx.date)}</span>
           </div>
