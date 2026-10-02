@@ -1,75 +1,104 @@
 import { NextResponse } from "next/server";
 
 import { requireAppUser } from "@/lib/auth-server";
+import { nextInvoiceNumber } from "@/lib/invoice-number";
 import { logTransactionAudit } from "@/lib/transaction-audit";
+import { isAdmin, type Book, type PaymentMode } from "@/lib/rbac";
 import { initialStatusForRole } from "@/lib/transaction-permissions";
-import { rebuildStockLedgerFromDate } from "@/lib/transactions-service";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
-import { checkWacColumnsAvailable } from "@/lib/wac-columns";
-import { persistWacRecalculation } from "@/lib/wac-persist";
+import { persistBookWac, yearOf } from "@/lib/wac-book";
 
+const SELECT =
+  "id,book,client_id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,payment_mode,vat_percent,notes,status,wac_at_sale,cost_of_sale,profit_loss,declared_from_id,paired_txn_id,created_by,approved_by,approved_at,rejection_reason";
+
+const PAYMENT_MODES: PaymentMode[] = ["bank", "qr", "cheque", "cash"];
+const STATUSES = ["pending", "approved", "rejected"];
+
+/** Create a transaction in either ledger. Admins post approved rows, users post pending. */
 export async function POST(req: Request) {
   const user = await requireAppUser();
   if (user instanceof NextResponse) return user;
 
   try {
-    const body = await req.json().catch(() => null);
-    const clientId = typeof body?.clientId === "string" ? body.clientId : null;
-    const type = body?.type === "BUY" || body?.type === "SELL" ? body.type : null;
-    const date = typeof body?.date === "string" ? body.date : null;
-    const invoiceNumber =
-      typeof body?.invoiceNumber === "string" ? body.invoiceNumber : null;
-    const weightGrams = typeof body?.weightGrams === "number" ? body.weightGrams : null;
-    const ratePerGram = typeof body?.ratePerGram === "number" ? body.ratePerGram : null;
-    const vatPercent = typeof body?.vatPercent === "number" ? body.vatPercent : 0;
-    const notes = typeof body?.notes === "string" ? body.notes.trim() || null : null;
-    const rawMode = body?.transactionMode;
-    const transactionMode =
-      rawMode === "cash" && (user.role as string) === "ADMIN" ? "cash" : "official";
+    const body = await req.json().catch(() => ({}));
 
-    if (!clientId || !type || !date || !invoiceNumber || !weightGrams || !ratePerGram) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    const book: Book = body.book === "unofficial" ? "unofficial" : "official";
+    const type = body.type === "BUY" || body.type === "SELL" ? body.type : null;
+    const date = typeof body.date === "string" && body.date ? body.date : null;
+    const clientId =
+      typeof body.clientId === "string" && body.clientId ? body.clientId : null;
+    const weight = Number(body.weightGrams);
+    const rate = Number(body.ratePerGram);
+
+    if (!type || !date || !Number.isFinite(weight) || weight <= 0) {
+      return NextResponse.json(
+        { error: "Book, type, date and a positive weight are required" },
+        { status: 400 }
+      );
+    }
+    if (!Number.isFinite(rate) || rate <= 0) {
+      return NextResponse.json({ error: "Rate must be greater than zero" }, { status: 400 });
     }
 
-    const status = initialStatusForRole(user.role);
-    const amountThb = weightGrams * ratePerGram;
-    const now = status === "approved" ? new Date().toISOString() : null;
+    const amount =
+      body.amountThb != null && body.amountThb !== ""
+        ? Number(body.amountThb)
+        : weight * rate;
 
-    const supabase = createSupabaseServiceClient() as any;
-    const { data: inserted, error } = await supabase
+    // Unofficial book is cash-only (DB constraint).
+    let paymentMode: PaymentMode = PAYMENT_MODES.includes(body.paymentMode)
+      ? body.paymentMode
+      : "bank";
+    if (book === "unofficial") paymentMode = "cash";
+
+    const vat =
+      book === "official" && body.vatPercent != null && body.vatPercent !== ""
+        ? Number(body.vatPercent)
+        : null;
+    const notes = typeof body.notes === "string" ? body.notes.trim() || null : null;
+
+    // Non-admins always start pending, whatever they post.
+    const status =
+      isAdmin(user) && STATUSES.includes(body.status)
+        ? body.status
+        : initialStatusForRole(user.role);
+    const approvedAt = status === "approved" ? new Date().toISOString() : null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = createSupabaseServiceClient() as any;
+
+    // Numbering is the server's job; a caller-supplied number still wins.
+    const manualInvoice =
+      typeof body.invoiceNumber === "string" ? body.invoiceNumber.trim() : "";
+    const invoiceNumber = manualInvoice || (await nextInvoiceNumber(sb, book, type, date));
+
+    const { data: inserted, error } = await sb
       .from("transactions")
       .insert({
-        client_id: clientId,
+        book,
         type,
         date,
+        client_id: clientId,
+        weight_grams: weight,
+        rate_per_gram: rate,
+        amount_thb: amount,
+        payment_mode: paymentMode,
+        vat_percent: vat,
         invoice_number: invoiceNumber,
-        weight_grams: weightGrams,
-        rate_per_gram: ratePerGram,
-        amount_thb: amountThb,
-        vat_percent: vatPercent,
         notes,
         status,
-        transaction_mode: transactionMode,
         created_by: user.id,
         approved_by: status === "approved" ? user.id : null,
-        approved_at: now,
+        approved_at: approvedAt,
       })
-      .select(
-        "id,client_id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,status,transaction_mode,created_by,approved_by,approved_at,rejection_reason"
-      )
+      .select(SELECT)
       .single();
 
     if (error) throw new Error(error.message);
 
+    // Only approved rows take part in the WAC chain.
     if (status === "approved") {
-      await rebuildStockLedgerFromDate(supabase, date);
-      const hasColumns = await checkWacColumnsAvailable(supabase as never);
-      if (hasColumns) {
-        await persistWacRecalculation(supabase as never, {
-          fromDate: date,
-          fromId: inserted.id,
-        });
-      }
+      await persistBookWac(sb, book, yearOf(date));
     }
 
     await logTransactionAudit({

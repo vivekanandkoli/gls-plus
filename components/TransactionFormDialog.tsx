@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useAppUser } from "@/hooks/use-app-user";
 import { cn } from "@/lib/utils";
 
 type Client = { id: string; name: string };
@@ -47,27 +48,77 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function TransactionEditDialog({
+function blankForm(): Record<string, string> {
+  return {
+    book: "official",
+    type: "BUY",
+    status: "approved",
+    date: new Date().toISOString().slice(0, 10),
+    clientId: "",
+    weightGrams: "",
+    ratePerGram: "",
+    amountThb: "",
+    paymentMode: "bank",
+    vatPercent: "",
+    invoiceNumber: "",
+    notes: "",
+  };
+}
+
+/**
+ * Create (`id: null`) or edit (`id: string`) a transaction in either ledger.
+ * Both modes share one form so the two books stay in sync.
+ */
+export function TransactionFormDialog({
   id,
   clients,
   onClose,
   onSaved,
 }: {
-  id: string;
+  id: string | null;
   clients: Client[];
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const isCreate = id === null;
+  const { isAdmin } = useAppUser();
+
   const [tx, setTx] = useState<Tx | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isCreate);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // form fields
-  const [form, setForm] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<Record<string, string>>(() =>
+    isCreate ? blankForm() : {}
+  );
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  // Invoice numbers are generated per book/type/date unless the user types one.
+  const [invoiceTouched, setInvoiceTouched] = useState(false);
+
   useEffect(() => {
+    if (!isCreate || invoiceTouched || !form.date) return;
+    let active = true;
+    const params = new URLSearchParams({
+      book: form.book,
+      type: form.type,
+      date: form.date,
+    });
+    fetch(`/api/transactions/next-invoice?${params.toString()}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!active || !d.invoiceNumber) return;
+        setForm((f) => ({ ...f, invoiceNumber: d.invoiceNumber }));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isCreate, invoiceTouched, form.book, form.type, form.date]);
+
+  useEffect(() => {
+    if (id === null) return;
     let active = true;
     setLoading(true);
     setError(null);
@@ -127,11 +178,14 @@ export function TransactionEditDialog({
         invoiceNumber: form.invoiceNumber.trim() || null,
         notes: form.notes.trim() || null,
       };
-      const res = await fetch(`/api/transactions/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        isCreate ? "/api/transactions" : `/api/transactions/${id}`,
+        {
+          method: isCreate ? "POST" : "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Save failed");
       onSaved();
@@ -162,7 +216,7 @@ export function TransactionEditDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Edit transaction</DialogTitle>
+          <DialogTitle>{isCreate ? "New transaction" : "Edit transaction"}</DialogTitle>
         </DialogHeader>
 
         {loading ? (
@@ -188,13 +242,15 @@ export function TransactionEditDialog({
                   <option value="SELL">SELL</option>
                 </select>
               </Field>
-              <Field label="Status">
-                <select className={selectCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
-                  <option value="pending">pending</option>
-                  <option value="approved">approved</option>
-                  <option value="rejected">rejected</option>
-                </select>
-              </Field>
+              {!isCreate || isAdmin ? (
+                <Field label="Status">
+                  <select className={selectCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
+                    <option value="pending">pending</option>
+                    <option value="approved">approved</option>
+                    <option value="rejected">rejected</option>
+                  </select>
+                </Field>
+              ) : null}
 
               <Field label="Date">
                 <Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
@@ -209,8 +265,15 @@ export function TransactionEditDialog({
                   ))}
                 </select>
               </Field>
-              <Field label="Invoice #">
-                <Input value={form.invoiceNumber} onChange={(e) => set("invoiceNumber", e.target.value)} placeholder="e.g. UP260911001" />
+              <Field label={isCreate ? "Invoice # (auto)" : "Invoice #"}>
+                <Input
+                  value={form.invoiceNumber}
+                  onChange={(e) => {
+                    if (isCreate) setInvoiceTouched(true);
+                    set("invoiceNumber", e.target.value);
+                  }}
+                  placeholder="e.g. UP260911001"
+                />
               </Field>
 
               <Field label="Weight (g)">
@@ -259,6 +322,15 @@ export function TransactionEditDialog({
               </p>
             ) : null}
 
+            {isCreate ? (
+              <p className="text-xs text-muted-foreground">
+                {invoiceTouched
+                  ? "Using the invoice number you typed instead of the generated one."
+                  : "Invoice number is generated from the date and re-checked on save."}
+                {!isAdmin ? " Saved as pending until an admin approves it." : null}
+              </p>
+            ) : null}
+
             {tx && tx.type === "SELL" && tx.profit_loss != null ? (
               <p className="text-xs text-muted-foreground">
                 Current persisted WAC profit: {tx.profit_loss.toLocaleString()} THB (recomputes on save).
@@ -268,15 +340,19 @@ export function TransactionEditDialog({
         )}
 
         <DialogFooter className="flex-row justify-between sm:justify-between">
-          <Button variant="destructive" onClick={handleDelete} disabled={saving || loading}>
-            Delete
-          </Button>
+          {isCreate ? (
+            <span />
+          ) : (
+            <Button variant="destructive" onClick={handleDelete} disabled={saving || loading}>
+              Delete
+            </Button>
+          )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={saving || loading}>
-              {saving ? "Saving…" : "Save changes"}
+              {saving ? "Saving…" : isCreate ? "Create transaction" : "Save changes"}
             </Button>
           </div>
         </DialogFooter>

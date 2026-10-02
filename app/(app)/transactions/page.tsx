@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
@@ -14,8 +15,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { TransactionEditDialog } from "@/components/TransactionEditDialog";
+import { TransactionFormDialog } from "@/components/TransactionFormDialog";
 
 type Row = {
   id: string;
@@ -81,10 +83,19 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // row editing
+  // row editing / creation
   const [editId, setEditId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [nonce, setNonce] = useState(0);
+
+  // Quick actions link here as /transactions?new=1 to open the create dialog.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new")) {
+      setCreating(true);
+      window.history.replaceState(null, "", "/transactions");
+    }
+  }, []);
 
   // load clients once (for the edit dialog's picker)
   useEffect(() => {
@@ -179,6 +190,10 @@ export default function TransactionsPage() {
           placeholder="Search invoice or client…"
           className="min-w-[220px] flex-1 rounded-lg border bg-card px-3 py-1.5 text-sm"
         />
+        <Button onClick={() => setCreating(true)}>
+          <Plus className="size-4" />
+          New transaction
+        </Button>
       </div>
 
       {error ? (
@@ -291,13 +306,17 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {editId ? (
-        <TransactionEditDialog
+      {editId || creating ? (
+        <TransactionFormDialog
           id={editId}
           clients={clients}
-          onClose={() => setEditId(null)}
+          onClose={() => {
+            setEditId(null);
+            setCreating(false);
+          }}
           onSaved={() => {
             setEditId(null);
+            setCreating(false);
             setNonce((n) => n + 1);
           }}
         />

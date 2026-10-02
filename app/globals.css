@@ -198,12 +198,47 @@
   .no-print {
     display: none !important;
   }
+  /*
+   * One invoice = one A4 sheet. Height is locked so ORIGINAL and COPY never
+   * split across pages or steal space from each other.
+   */
   .print-page {
     box-shadow: none !important;
     border: none !important;
+    box-sizing: border-box !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    max-width: 210mm !important;
+    max-height: 297mm !important;
+    padding: 8mm 10mm !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: page;
+    page-break-after: always;
   }
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .invoice-filler-row {
+    display: none !important;
+  }
+  .invoice-sig-gap {
+    height: 18px !important;
+  }
+  /*
+   * A zero page margin leaves the browser no room to print its own header and
+   * footer (date, title, URL, page number), which keeps the invoice clean.
+   */
   @page {
     size: A4;
-    margin: 12mm;
+    margin: 0;
+  }
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
   }
 }

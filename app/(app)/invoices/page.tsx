@@ -35,6 +35,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { cn, embeddedClientName, formatCurrency } from "@/lib/utils";
 import {
   InvoiceDocument,
+  InvoicePrintSet,
   type Settings,
   type TxDetail,
 } from "@/components/PrintInvoice";
@@ -134,24 +135,34 @@ function InvoicePreviewPanel({
       {/* Save as PDF tip */}
       <div className="flex items-start gap-2 px-4 py-2 text-xs text-muted-foreground bg-muted/40 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
         <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" />
-        <span>Click <strong>Save PDF</strong> or <strong>Print</strong> → in the print dialog select <strong>Save as PDF</strong> as the printer to download a PDF file.</span>
+        <span>
+          Print produces <strong>2 pages</strong>: the customer&apos;s <strong>ORIGINAL</strong> and the owner&apos;s <strong>COPY</strong>.
+          Use <strong>Save PDF</strong> or choose <strong>Save as PDF</strong> in the print dialog.
+        </span>
       </div>
 
       {/* Hidden DOM node used by react-to-print */}
       <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
         <div ref={printRef}>
-          <InvoiceDocument tx={tx} settings={settings} />
+          <InvoicePrintSet tx={tx} settings={settings} />
         </div>
       </div>
 
-      {/* Live preview - scrollable */}
-      <div className="flex-1 overflow-auto bg-muted/30 p-4">
-        <div
-          className="mx-auto rounded-lg border shadow-sm overflow-hidden"
-          style={{ maxWidth: "680px", background: "#fff" }}
-        >
-          <InvoiceDocument tx={tx} settings={settings} />
-        </div>
+      {/* Live preview - scrollable. Mirrors the two sheets that will print. */}
+      <div className="flex-1 overflow-auto bg-muted/30 p-4 space-y-4">
+        {(["ORIGINAL", "COPY"] as const).map((label) => (
+          <div key={label} className="mx-auto" style={{ maxWidth: "680px" }}>
+            <div className="mb-1 text-center text-xs font-medium text-muted-foreground">
+              Page {label === "ORIGINAL" ? 1 : 2} · {label}
+            </div>
+            <div
+              className="rounded-lg border shadow-sm overflow-hidden"
+              style={{ background: "#fff" }}
+            >
+              <InvoiceDocument tx={tx} settings={settings} copyLabel={label} />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

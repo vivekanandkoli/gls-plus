@@ -1,10 +1,12 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -16,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { TransactionEditDialog } from "@/components/TransactionEditDialog";
+import { TransactionFormDialog } from "@/components/TransactionFormDialog";
 
 type BookSummary = {
   book: "official" | "unofficial";
@@ -148,8 +150,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // row editing (shared dialog)
+  // row editing / creation (shared dialog)
   const [editId, setEditId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [nonce, setNonce] = useState(0);
 
@@ -191,7 +194,7 @@ export default function DashboardPage() {
       description="Two independent ledgers: the real vault (unofficial) and the declared book (official)."
     >
       {/* Year selector */}
-      <div className="mb-5 flex items-center gap-2">
+      <div className="mb-5 flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Year</span>
         <div className="flex gap-1 rounded-lg border bg-card p-1">
           {(data?.years ?? []).map((y) => (
@@ -209,6 +212,10 @@ export default function DashboardPage() {
             </button>
           ))}
         </div>
+        <Button className="ml-auto" onClick={() => setCreating(true)}>
+          <Plus className="size-4" />
+          New transaction
+        </Button>
       </div>
 
       {error ? (
@@ -267,9 +274,15 @@ export default function DashboardPage() {
           <Card className="mt-4">
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle className="text-sm">Recent transactions · {year}</CardTitle>
-              <Link href="/transactions" className="text-sm text-primary hover:underline">
-                View all
-              </Link>
+              <div className="flex items-center gap-3">
+                <Button size="sm" variant="outline" onClick={() => setCreating(true)}>
+                  <Plus className="size-4" />
+                  New
+                </Button>
+                <Link href="/transactions" className="text-sm text-primary hover:underline">
+                  View all
+                </Link>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -290,7 +303,14 @@ export default function DashboardPage() {
                     {(data?.recent ?? []).length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
-                          No transactions found.
+                          No transactions found.{" "}
+                          <button
+                            onClick={() => setCreating(true)}
+                            className="text-primary hover:underline"
+                          >
+                            Add the first one
+                          </button>
+                          .
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -327,13 +347,17 @@ export default function DashboardPage() {
         </>
       )}
 
-      {editId ? (
-        <TransactionEditDialog
+      {editId || creating ? (
+        <TransactionFormDialog
           id={editId}
           clients={clients}
-          onClose={() => setEditId(null)}
+          onClose={() => {
+            setEditId(null);
+            setCreating(false);
+          }}
           onSaved={() => {
             setEditId(null);
+            setCreating(false);
             setNonce((n) => n + 1);
           }}
         />

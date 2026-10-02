@@ -77,7 +77,17 @@ function formatDate(iso: string): string {
 
 // ─── Invoice document ─────────────────────────────────────────────────────────
 
-export function InvoiceDocument({ tx, settings }: { tx: TxDetail; settings: Settings }) {
+export type CopyLabel = "ORIGINAL" | "COPY";
+
+export function InvoiceDocument({
+  tx,
+  settings,
+  copyLabel = "ORIGINAL",
+}: {
+  tx: TxDetail;
+  settings: Settings;
+  copyLabel?: CopyLabel;
+}) {
   const subtotal = tx.amount_thb ?? 0;
   const vatRate = tx.vat_percent ?? 0;
   const vatAmt = subtotal * (vatRate / 100);
@@ -204,7 +214,7 @@ export function InvoiceDocument({ tx, settings }: { tx: TxDetail; settings: Sett
   };
 
   return (
-    <div style={s.page}>
+    <div className="print-page" style={s.page}>
       {/* ── Header ── */}
       <div style={s.headerRow}>
         {/* Left: Company info */}
@@ -223,10 +233,19 @@ export function InvoiceDocument({ tx, settings }: { tx: TxDetail; settings: Sett
 
         {/* Right: Document type */}
         <div style={s.docTypeBlock}>
-          <div style={s.docTypeLabel}>Receipt /</div>
-          <div style={s.docTypeLabel}>Tax Invoice</div>
-          <div style={s.docTypeSub}>ใบเสร็จรับเงิน / ใบกำกับภาษี</div>
-          <div style={s.originalBadge}>ORIGINAL</div>
+          {tx.type === "BUY" ? (
+            <>
+              <div style={s.docTypeLabel}>Purchase Receipt /</div>
+              <div style={s.docTypeSub}>ใบเสร็จรับเงิน</div>
+            </>
+          ) : (
+            <>
+              <div style={s.docTypeLabel}>Receipt /</div>
+              <div style={s.docTypeLabel}>Tax Invoice</div>
+              <div style={s.docTypeSub}>ใบเสร็จรับเงิน / ใบกำกับภาษี</div>
+            </>
+          )}
+          <div style={s.originalBadge}>{copyLabel}</div>
         </div>
       </div>
 
@@ -289,9 +308,9 @@ export function InvoiceDocument({ tx, settings }: { tx: TxDetail; settings: Sett
             <td style={s.tdRight}>{fmtNum(tx.rate_per_gram, 2)}</td>
             <td style={s.tdRight}>{fmtNum(subtotal, 2)}</td>
           </tr>
-          {/* Blank filler rows for visual space */}
+          {/* Blank filler rows for visual space (hidden when printing so both copies fit one A4 each) */}
           {[1, 2].map((i) => (
-            <tr key={i}>
+            <tr key={i} className="invoice-filler-row">
               <td style={{ ...s.td, height: "24px" }}></td>
               <td style={s.td}></td>
               <td style={s.tdRight}></td>
@@ -356,19 +375,19 @@ export function InvoiceDocument({ tx, settings }: { tx: TxDetail; settings: Sett
 
       <div style={s.sigRow}>
         <div>
-          <div style={{ height: "32px" }} />
+          <div className="invoice-sig-gap" style={{ height: "32px" }} />
           <div style={s.sigBox}>ผู้มีอำนาจลงนาม<br />Authorised Signature</div>
         </div>
         <div>
-          <div style={{ height: "32px" }} />
+          <div className="invoice-sig-gap" style={{ height: "32px" }} />
           <div style={s.sigBox}>ผู้รับเงิน / Collector</div>
         </div>
         <div>
-          <div style={{ height: "32px" }} />
+          <div className="invoice-sig-gap" style={{ height: "32px" }} />
           <div style={s.sigBox}>วันที่ / Date</div>
         </div>
         <div>
-          <div style={{ height: "32px" }} />
+          <div className="invoice-sig-gap" style={{ height: "32px" }} />
           <div style={s.sigBox}>ผู้ส่งสินค้า / Delivery by</div>
         </div>
       </div>
@@ -385,6 +404,19 @@ export function InvoiceDocument({ tx, settings }: { tx: TxDetail; settings: Sett
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * What actually goes on paper: the customer's ORIGINAL followed by the owner's
+ * COPY, split across two sheets.
+ */
+export function InvoicePrintSet({ tx, settings }: { tx: TxDetail; settings: Settings }) {
+  return (
+    <>
+      <InvoiceDocument tx={tx} settings={settings} copyLabel="ORIGINAL" />
+      <InvoiceDocument tx={tx} settings={settings} copyLabel="COPY" />
+    </>
   );
 }
 
@@ -430,7 +462,7 @@ export function PrintInvoiceButton({ tx }: { tx: TxDetail }) {
 
       <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
         <div ref={printRef}>
-          <InvoiceDocument tx={tx} settings={settings} />
+          <InvoicePrintSet tx={tx} settings={settings} />
         </div>
       </div>
     </>

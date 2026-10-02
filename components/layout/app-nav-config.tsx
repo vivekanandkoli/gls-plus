@@ -70,6 +70,12 @@ export const PRIMARY_NAV: AppNavItem[] = [
 
 export const QUICK_ACTIONS: AppNavItem[] = [
   {
+    href: "/transactions?new=1",
+    label: "New transaction",
+    icon: PlusCircle,
+    keywords: ["create", "add", "buy", "sell", "entry", "official", "unofficial"],
+  },
+  {
     href: "/deals/new",
     label: "New deal",
     icon: PlusCircle,
