@@ -1,0 +1,495 @@
+
+
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+
+CREATE SCHEMA IF NOT EXISTS "gls";
+
+
+ALTER SCHEMA "gls" OWNER TO "postgres";
+
+SET default_tablespace = '';
+
+SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "gls"."activity_log" (
+    "id" bigint NOT NULL,
+    "transaction_id" "uuid",
+    "action" "text" NOT NULL,
+    "performed_by" integer,
+    "old_values" "jsonb",
+    "new_values" "jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "gls"."activity_log" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "gls"."activity_log_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "gls"."activity_log_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "gls"."activity_log_id_seq" OWNED BY "gls"."activity_log"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "gls"."clients" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "name" "text" NOT NULL,
+    "phone" "text",
+    "email" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "gls"."clients" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "gls"."invoice_counters" (
+    "book" "text" NOT NULL,
+    "date" "date" NOT NULL,
+    "type" "text" NOT NULL,
+    "counter" integer DEFAULT 0 NOT NULL,
+    CONSTRAINT "invoice_counters_book_check" CHECK (("book" = ANY (ARRAY['official'::"text", 'unofficial'::"text"]))),
+    CONSTRAINT "invoice_counters_type_check" CHECK (("type" = ANY (ARRAY['BUY'::"text", 'SELL'::"text"])))
+);
+
+
+ALTER TABLE "gls"."invoice_counters" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "gls"."opening_balances" (
+    "year" integer NOT NULL,
+    "book" "text" NOT NULL,
+    "opening_stock_gm" numeric(14,3) DEFAULT 0 NOT NULL,
+    "opening_wac" numeric(12,4) DEFAULT 0 NOT NULL,
+    "opening_stock_value_thb" numeric(18,2) DEFAULT 0 NOT NULL,
+    CONSTRAINT "opening_balances_book_check" CHECK (("book" = ANY (ARRAY['official'::"text", 'unofficial'::"text"])))
+);
+
+
+ALTER TABLE "gls"."opening_balances" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "gls"."settings" (
+    "id" integer DEFAULT 1 NOT NULL,
+    "company_name" "text",
+    "company_name_th" "text",
+    "tax_id" "text",
+    "phone" "text",
+    "email" "text",
+    "website" "text",
+    "address_1" "text",
+    "address_2" "text",
+    "logo_url" "text",
+    "official_low_stock_threshold_gm" numeric(14,3) DEFAULT 0,
+    "unofficial_low_stock_threshold_gm" numeric(14,3) DEFAULT 0,
+    "default_vat_percent" numeric(6,3) DEFAULT 7,
+    "invoice_prefix_official_buy" "text" DEFAULT 'IV'::"text",
+    "invoice_prefix_official_sell" "text" DEFAULT 'UP'::"text",
+    "invoice_prefix_unofficial_buy" "text" DEFAULT 'UB'::"text",
+    "invoice_prefix_unofficial_sell" "text" DEFAULT 'US'::"text",
+    "invoice_footer" "text",
+    CONSTRAINT "settings_singleton" CHECK (("id" = 1))
+);
+
+
+ALTER TABLE "gls"."settings" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "gls"."stock_adjustments" (
+    "id" bigint NOT NULL,
+    "book" "text" NOT NULL,
+    "date" "date" NOT NULL,
+    "delta_gm" numeric(14,3) NOT NULL,
+    "reason" "text" NOT NULL,
+    "adjusted_by" integer,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "stock_adjustments_book_check" CHECK (("book" = ANY (ARRAY['official'::"text", 'unofficial'::"text"])))
+);
+
+
+ALTER TABLE "gls"."stock_adjustments" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "gls"."stock_adjustments_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "gls"."stock_adjustments_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "gls"."stock_adjustments_id_seq" OWNED BY "gls"."stock_adjustments"."id";
+
+
+
+CREATE TABLE IF NOT EXISTS "gls"."transactions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "book" "text" NOT NULL,
+    "date" "date" NOT NULL,
+    "type" "text" NOT NULL,
+    "client_id" "uuid",
+    "weight_grams" numeric(14,3) NOT NULL,
+    "rate_per_gram" numeric(12,4) NOT NULL,
+    "amount_thb" numeric(16,2) NOT NULL,
+    "payment_mode" "text" NOT NULL,
+    "vat_percent" numeric(6,3),
+    "invoice_number" "text",
+    "notes" "text",
+    "status" "text" DEFAULT 'pending'::"text" NOT NULL,
+    "wac_at_sale" numeric(12,4),
+    "cost_of_sale" numeric(16,2),
+    "profit_loss" numeric(16,2),
+    "paired_txn_id" "uuid",
+    "declared_from_id" "uuid",
+    "created_by" integer,
+    "approved_by" integer,
+    "approved_at" timestamp with time zone,
+    "rejection_reason" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "transactions_book_check" CHECK (("book" = ANY (ARRAY['official'::"text", 'unofficial'::"text"]))),
+    CONSTRAINT "transactions_payment_mode_check" CHECK (("payment_mode" = ANY (ARRAY['bank'::"text", 'qr'::"text", 'cheque'::"text", 'cash'::"text"]))),
+    CONSTRAINT "transactions_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'approved'::"text", 'rejected'::"text"]))),
+    CONSTRAINT "transactions_type_check" CHECK (("type" = ANY (ARRAY['BUY'::"text", 'SELL'::"text"]))),
+    CONSTRAINT "unofficial_is_cash" CHECK ((("book" <> 'unofficial'::"text") OR ("payment_mode" = 'cash'::"text")))
+);
+
+
+ALTER TABLE "gls"."transactions" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "gls"."users" (
+    "id" integer NOT NULL,
+    "auth_id" "uuid" NOT NULL,
+    "email" "text" NOT NULL,
+    "role" "text" DEFAULT 'user'::"text" NOT NULL,
+    "is_active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "users_role_check" CHECK (("role" = ANY (ARRAY['admin'::"text", 'user'::"text"])))
+);
+
+
+ALTER TABLE "gls"."users" OWNER TO "postgres";
+
+
+CREATE SEQUENCE IF NOT EXISTS "gls"."users_id_seq"
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE "gls"."users_id_seq" OWNER TO "postgres";
+
+
+ALTER SEQUENCE "gls"."users_id_seq" OWNED BY "gls"."users"."id";
+
+
+
+ALTER TABLE ONLY "gls"."activity_log" ALTER COLUMN "id" SET DEFAULT "nextval"('"gls"."activity_log_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "gls"."stock_adjustments" ALTER COLUMN "id" SET DEFAULT "nextval"('"gls"."stock_adjustments_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "gls"."users" ALTER COLUMN "id" SET DEFAULT "nextval"('"gls"."users_id_seq"'::"regclass");
+
+
+
+ALTER TABLE ONLY "gls"."activity_log"
+    ADD CONSTRAINT "activity_log_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "gls"."clients"
+    ADD CONSTRAINT "clients_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "gls"."invoice_counters"
+    ADD CONSTRAINT "invoice_counters_pkey" PRIMARY KEY ("book", "date", "type");
+
+
+
+ALTER TABLE ONLY "gls"."opening_balances"
+    ADD CONSTRAINT "opening_balances_pkey" PRIMARY KEY ("year", "book");
+
+
+
+ALTER TABLE ONLY "gls"."settings"
+    ADD CONSTRAINT "settings_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "gls"."stock_adjustments"
+    ADD CONSTRAINT "stock_adjustments_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "gls"."transactions"
+    ADD CONSTRAINT "transactions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "gls"."users"
+    ADD CONSTRAINT "users_auth_id_key" UNIQUE ("auth_id");
+
+
+
+ALTER TABLE ONLY "gls"."users"
+    ADD CONSTRAINT "users_pkey" PRIMARY KEY ("id");
+
+
+
+CREATE INDEX "activity_log_ts_idx" ON "gls"."activity_log" USING "btree" ("created_at" DESC);
+
+
+
+CREATE INDEX "activity_log_tx_idx" ON "gls"."activity_log" USING "btree" ("transaction_id");
+
+
+
+CREATE INDEX "clients_name_key" ON "gls"."clients" USING "btree" ("lower"("name"));
+
+
+
+CREATE INDEX "stock_adjustments_book_idx" ON "gls"."stock_adjustments" USING "btree" ("book", "date");
+
+
+
+CREATE INDEX "transactions_book_date_idx" ON "gls"."transactions" USING "btree" ("book", "date", "created_at", "id");
+
+
+
+CREATE INDEX "transactions_book_idx" ON "gls"."transactions" USING "btree" ("book");
+
+
+
+CREATE INDEX "transactions_client_idx" ON "gls"."transactions" USING "btree" ("client_id");
+
+
+
+CREATE INDEX "transactions_declared_from_idx" ON "gls"."transactions" USING "btree" ("declared_from_id");
+
+
+
+CREATE INDEX "transactions_status_idx" ON "gls"."transactions" USING "btree" ("status");
+
+
+
+CREATE INDEX "users_auth_id_idx" ON "gls"."users" USING "btree" ("auth_id");
+
+
+
+CREATE INDEX "users_email_idx" ON "gls"."users" USING "btree" ("email");
+
+
+
+ALTER TABLE ONLY "gls"."activity_log"
+    ADD CONSTRAINT "activity_log_performed_by_fkey" FOREIGN KEY ("performed_by") REFERENCES "gls"."users"("id");
+
+
+
+ALTER TABLE ONLY "gls"."activity_log"
+    ADD CONSTRAINT "activity_log_transaction_id_fkey" FOREIGN KEY ("transaction_id") REFERENCES "gls"."transactions"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "gls"."stock_adjustments"
+    ADD CONSTRAINT "stock_adjustments_adjusted_by_fkey" FOREIGN KEY ("adjusted_by") REFERENCES "gls"."users"("id");
+
+
+
+ALTER TABLE ONLY "gls"."transactions"
+    ADD CONSTRAINT "transactions_approved_by_fkey" FOREIGN KEY ("approved_by") REFERENCES "gls"."users"("id");
+
+
+
+ALTER TABLE ONLY "gls"."transactions"
+    ADD CONSTRAINT "transactions_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "gls"."clients"("id");
+
+
+
+ALTER TABLE ONLY "gls"."transactions"
+    ADD CONSTRAINT "transactions_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "gls"."users"("id");
+
+
+
+ALTER TABLE ONLY "gls"."transactions"
+    ADD CONSTRAINT "transactions_declared_from_id_fkey" FOREIGN KEY ("declared_from_id") REFERENCES "gls"."transactions"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "gls"."transactions"
+    ADD CONSTRAINT "transactions_paired_txn_id_fkey" FOREIGN KEY ("paired_txn_id") REFERENCES "gls"."transactions"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE "gls"."activity_log" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "authenticated_read" ON "gls"."activity_log" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "authenticated_read" ON "gls"."clients" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "authenticated_read" ON "gls"."invoice_counters" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "authenticated_read" ON "gls"."opening_balances" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "authenticated_read" ON "gls"."settings" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "authenticated_read" ON "gls"."stock_adjustments" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "authenticated_read" ON "gls"."transactions" FOR SELECT TO "authenticated" USING (true);
+
+
+
+CREATE POLICY "authenticated_read" ON "gls"."users" FOR SELECT TO "authenticated" USING (true);
+
+
+
+ALTER TABLE "gls"."clients" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "gls"."invoice_counters" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "gls"."opening_balances" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "gls"."settings" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "gls"."stock_adjustments" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "gls"."transactions" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "gls"."users" ENABLE ROW LEVEL SECURITY;
+
+
+GRANT USAGE ON SCHEMA "gls" TO "anon";
+GRANT USAGE ON SCHEMA "gls" TO "authenticated";
+GRANT USAGE ON SCHEMA "gls" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."activity_log" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."activity_log" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."activity_log" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "gls"."activity_log_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "gls"."activity_log_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "gls"."activity_log_id_seq" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."clients" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."clients" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."clients" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."invoice_counters" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."invoice_counters" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."invoice_counters" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."opening_balances" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."opening_balances" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."opening_balances" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."settings" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."settings" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."settings" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."stock_adjustments" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."stock_adjustments" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."stock_adjustments" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "gls"."stock_adjustments_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "gls"."stock_adjustments_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "gls"."stock_adjustments_id_seq" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."transactions" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."transactions" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."transactions" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."users" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."users" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "gls"."users" TO "service_role";
+
+
+
+GRANT ALL ON SEQUENCE "gls"."users_id_seq" TO "anon";
+GRANT ALL ON SEQUENCE "gls"."users_id_seq" TO "authenticated";
+GRANT ALL ON SEQUENCE "gls"."users_id_seq" TO "service_role";
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "gls" GRANT ALL ON SEQUENCES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "gls" GRANT ALL ON SEQUENCES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "gls" GRANT ALL ON SEQUENCES TO "service_role";
+
+
+
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "gls" GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLES TO "anon";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "gls" GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLES TO "authenticated";
+ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "gls" GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLES TO "service_role";
+
+
+
+
