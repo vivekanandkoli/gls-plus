@@ -242,3 +242,28 @@
     padding: 0 !important;
   }
 }
+
+/* ===== Mobile / installed-PWA native polish ===== */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@media (max-width: 767px) {
+  /* Single compact header clears the status bar / Dynamic Island. */
+  .app-header-safe {
+    padding-top: calc(0.625rem + env(safe-area-inset-top, 0px));
+  }
+  /* Leave room for the fixed bottom tab bar + home indicator. */
+  .app-content {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}

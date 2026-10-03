@@ -1,4 +1,4 @@
-import { MobileNav } from "@/components/layout/MobileNav";
+import { BottomTabBar } from "@/components/layout/BottomTabBar";
 import { AppCommandPalette } from "@/components/layout/AppCommandPalette";
 import { Sidebar } from "@/components/layout/Sidebar";
 
@@ -11,9 +11,9 @@ export default function AppLayout({
     <div className="flex min-h-screen w-full">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileNav />
         <AppCommandPalette />
         {children}
+        <BottomTabBar />
       </div>
     </div>
   );

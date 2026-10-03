@@ -25,7 +25,7 @@ export function Header({
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 flex min-h-14 md:min-h-16 flex-col gap-0 border-b px-4 py-3 md:flex-row md:items-center md:justify-between md:gap-3 md:px-6 md:py-0",
+        "app-header-safe sticky top-0 z-40 flex min-h-14 md:min-h-16 flex-col gap-0 border-b px-4 pb-3 md:flex-row md:items-center md:justify-between md:gap-3 md:px-6 md:py-0",
         "bg-background/80 shadow-[0_1px_0_rgba(28,25,23,0.06)] backdrop-blur-md supports-[backdrop-filter]:bg-background/72",
         "dark:shadow-[0_1px_0_rgba(245,240,232,0.06)]"
       )}
