@@ -114,21 +114,41 @@ export function InvoiceDocument({
       fontSize: "11px",
       color: "#111",
       background: "#fff",
-      padding: "28px 32px",
+      padding: "24px 26px",
       maxWidth: "780px",
       margin: "0 auto",
       lineHeight: 1.4,
+      // Formal double frame around the whole document.
+      border: "3px double #1c1917",
     },
     headerRow: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "flex-start",
-      marginBottom: "12px",
+      gap: "16px",
+      marginBottom: "10px",
     },
-    companyBlock: { flex: 1, paddingRight: "20px" },
-    companyNameTh: { fontSize: "14px", fontWeight: 700, color: "#111", marginBottom: "1px" },
+    // Left: logo with the "GLS PLUS" wordmark beneath it.
+    brandBlock: {
+      display: "flex",
+      flexDirection: "column" as const,
+      alignItems: "center",
+      width: "76px",
+      flexShrink: 0,
+    },
+    brandName: {
+      fontSize: "11px",
+      fontWeight: 800,
+      letterSpacing: "0.16em",
+      color: "#1c1917",
+      marginTop: "4px",
+      whiteSpace: "nowrap" as const,
+    },
+    // Middle: company name + addresses, kept compact.
+    companyBlock: { flex: 1 },
+    companyNameTh: { fontSize: "13px", fontWeight: 700, color: "#111" },
     companyNameEn: { fontSize: "13px", fontWeight: 700, color: "#111" },
-    addressText: { fontSize: "10px", color: "#333", marginTop: "3px", lineHeight: 1.5 },
+    addressText: { fontSize: "10px", color: "#333", marginTop: "2px", lineHeight: 1.45 },
     docTypeBlock: { textAlign: "right", minWidth: "200px" },
     docTypeLabel: {
       fontSize: "16px", fontWeight: 800, color: "#111", letterSpacing: "0.04em",
@@ -219,28 +239,30 @@ export function InvoiceDocument({
     <div className="print-page" style={s.page}>
       {/* ── Header ── */}
       <div style={s.headerRow}>
-        {/* Left: Company info — logo sits to the LEFT of the text block, as on
-            the printed invoice (not stacked above it). */}
+        {/* Left: logo with the GLS PLUS wordmark beneath it. */}
+        <div style={s.brandBlock}>
+          {logoSrc && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoSrc}
+              alt="logo"
+              style={{ height: "52px", width: "52px", objectFit: "contain" }}
+            />
+          )}
+          <div style={s.brandName}>GLS PLUS</div>
+        </div>
+
+        {/* Middle: company name + addresses, condensed. */}
         <div style={s.companyBlock}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
-            {logoSrc && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoSrc}
-                alt="logo"
-                style={{ height: "58px", width: "58px", objectFit: "contain", flexShrink: 0 }}
-              />
-            )}
-            <div>
-              <div style={{ marginBottom: "2px" }}>
-                <span style={s.companyNameTh}>{companyTh}</span>{" "}
-                <span style={s.companyNameEn}>{companyEn}</span>
-              </div>
-              <div style={s.addressText}>{addressTh}</div>
-              <div style={s.addressText}>{addressEn}</div>
-              <div style={s.addressText}>Email: {email} &nbsp; Tel: {phone}</div>
-              <div style={s.addressText}>เลขประจำตัวผู้เสียภาษี / Tax ID: <strong>{taxId}</strong> (สำนักงานใหญ่ / Head Office)</div>
-            </div>
+          <div>
+            <span style={s.companyNameTh}>{companyTh}</span>{" "}
+            <span style={s.companyNameEn}>{companyEn}</span>
+          </div>
+          <div style={s.addressText}>{addressEn}</div>
+          <div style={s.addressText}>{addressTh}</div>
+          <div style={s.addressText}>Email: {email} &nbsp;·&nbsp; Tel: {phone}</div>
+          <div style={s.addressText}>
+            เลขประจำตัวผู้เสียภาษี / Tax ID: <strong>{taxId}</strong> &nbsp;·&nbsp; สำนักงานใหญ่ / Head Office
           </div>
         </div>
 
