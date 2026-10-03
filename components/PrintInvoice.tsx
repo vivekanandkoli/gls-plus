@@ -96,7 +96,7 @@ export function InvoiceDocument({
 
   const companyEn = settings.company_name_en ?? "GLS PLUS CO., LTD.";
   const companyTh = settings.company_name_th ?? "บริษัท จีแอลเอส พลัส จำกัด";
-  const addressEn = settings.address_en ?? "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31 KWAENG DOKMAI, KHET PRAWET, BANGKOK 10250";
+  const addressEn = settings.address_en ?? "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31 KWAENG DOKMAI, KHET PRAWET BANGKOK 10250";
   const addressTh = settings.address_th ?? "66/22 ซ. 31 เจมโมโปลิส เขตประเวศ กรุงเทพฯ 10250";
   const phone = settings.phone ?? "087-039-8795";
   const email = settings.email ?? "glsplusdb@gmail.com";
@@ -219,18 +219,29 @@ export function InvoiceDocument({
     <div className="print-page" style={s.page}>
       {/* ── Header ── */}
       <div style={s.headerRow}>
-        {/* Left: Company info */}
+        {/* Left: Company info — logo sits to the LEFT of the text block, as on
+            the printed invoice (not stacked above it). */}
         <div style={s.companyBlock}>
-          {logoSrc && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoSrc} alt="logo" style={{ height: "44px", marginBottom: "6px" }} />
-          )}
-          <div style={s.companyNameTh}>{companyTh}</div>
-          <div style={s.companyNameEn}>{companyEn}</div>
-          <div style={s.addressText}>{addressTh}</div>
-          <div style={s.addressText}>{addressEn}</div>
-          <div style={s.addressText}>Email: {email} &nbsp; Tel: {phone}</div>
-          <div style={s.addressText}>เลขประจำตัวผู้เสียภาษี / Tax ID: <strong>{taxId}</strong> (สำนักงานใหญ่ / Head Office)</div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+            {logoSrc && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoSrc}
+                alt="logo"
+                style={{ height: "58px", width: "58px", objectFit: "contain", flexShrink: 0 }}
+              />
+            )}
+            <div>
+              <div style={{ marginBottom: "2px" }}>
+                <span style={s.companyNameTh}>{companyTh}</span>{" "}
+                <span style={s.companyNameEn}>{companyEn}</span>
+              </div>
+              <div style={s.addressText}>{addressTh}</div>
+              <div style={s.addressText}>{addressEn}</div>
+              <div style={s.addressText}>Email: {email} &nbsp; Tel: {phone}</div>
+              <div style={s.addressText}>เลขประจำตัวผู้เสียภาษี / Tax ID: <strong>{taxId}</strong> (สำนักงานใหญ่ / Head Office)</div>
+            </div>
+          </div>
         </div>
 
         {/* Right: Document type */}

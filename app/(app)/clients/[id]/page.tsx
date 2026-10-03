@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Bar,
   BarChart,
@@ -84,8 +84,9 @@ const editSchema = z.object({
 });
 type EditValues = z.output<typeof editSchema>;
 
-export default function ClientDetailPage({ params }: { params: { id: string } }) {
+export default function ClientDetailPage() {
   const router = useRouter();
+  const { id } = useParams<{ id: string }>();
   const [client, setClient] = useState<Client | null>(null);
   const [tx, setTx] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(false);
@@ -123,7 +124,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         const { data: c, error: cErr } = await supabase
           .from("clients")
           .select("id,name,phone,email,tax_id,address,notes")
-          .eq("id", params.id)
+          .eq("id", id)
           .single();
         if (cErr) throw cErr;
         setClient(c as Client);
@@ -139,7 +140,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
         const { data: t, error: tErr } = await supabase
           .from("transactions")
           .select("id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb")
-          .eq("client_id", params.id)
+          .eq("client_id", id)
           .order("date", { ascending: false })
           .order("id", { ascending: false })
           .limit(5000);
@@ -150,7 +151,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
       }
     };
     void run();
-  }, [canQuery, params.id, editForm]);
+  }, [canQuery, id, editForm]);
 
   const stats = useMemo(() => {
     let buyGrams = 0;
@@ -217,7 +218,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
           email: values.email?.trim() || null,
           notes: values.notes?.trim() || null,
         })
-        .eq("id", params.id)
+        .eq("id", id)
         .select("id,name,phone,email,tax_id,address,notes")
         .single();
       if (error) throw error;
@@ -229,7 +230,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
   };
 
   return (
-    <PageWrapper title={client ? client.name : `Client ${params.id}`}>
+    <PageWrapper title={client ? client.name : `Client ${id}`}>
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm text-muted-foreground">
           {loading ? "Loading..." : ""}
@@ -239,7 +240,7 @@ export default function ClientDetailPage({ params }: { params: { id: string } })
             Edit Client
           </Button>
           <Button asChild>
-            <Link href={`/transactions/new?client_id=${params.id}`}>
+            <Link href={`/transactions/new?client_id=${id}`}>
               New Transaction for this Client
             </Link>
           </Button>

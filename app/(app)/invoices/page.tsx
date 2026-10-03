@@ -74,7 +74,7 @@ const PAGE_SIZE = 30;
 const DEFAULT_SETTINGS: Settings = {
   company_name_en: "GLS PLUS CO., LTD.",
   company_name_th: "บริษัท จีแอลเอส พลัส จำกัด",
-  address_en: "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31 KWAENG DOKMAI, KHET PRAWET, BANGKOK 10250",
+  address_en: "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31 KWAENG DOKMAI, KHET PRAWET BANGKOK 10250",
   address_th: "66/22 ซ. 31 เจมโมโปลิส เขตประเวศ กรุงเทพฯ 10250",
   phone: "087-039-8795",
   email: "glsplusdb@gmail.com",
