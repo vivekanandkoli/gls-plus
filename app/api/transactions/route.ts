@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAppUser } from "@/lib/auth-server";
 import { nextInvoiceNumber } from "@/lib/invoice-number";
 import { logTransactionAudit } from "@/lib/transaction-audit";
+import { notifyAdmins } from "@/lib/push";
 import { isAdmin, type Book, type PaymentMode } from "@/lib/rbac";
 import { initialStatusForRole } from "@/lib/transaction-permissions";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
@@ -107,6 +108,16 @@ export async function POST(req: Request) {
       performedBy: user.id,
       newValues: inserted as Record<string, unknown>,
     });
+
+    // Alert admins when something lands in the approval queue.
+    if (status === "pending") {
+      const label = `${type} ${weight}g${inserted.invoice_number ? ` · ${inserted.invoice_number}` : ""}`;
+      await notifyAdmins({
+        title: "Transaction needs approval",
+        body: `${label} is awaiting your approval.`,
+        url: `/transactions/${inserted.id}`,
+      });
+    }
 
     return NextResponse.json({ transaction: inserted }, { status: 201 });
   } catch (e) {

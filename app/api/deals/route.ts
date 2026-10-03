@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAppUser } from "@/lib/auth-server";
 import { createDeal, type CreateDealInput, type PaymentMode } from "@/lib/deals-service";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
+import { notifyAdmins } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,17 @@ export async function POST(req: Request) {
     };
 
     const deal = await createDeal(input, user);
+
+    // Alert admins when a deal lands in the approval queue.
+    if ((deal as { status?: string })?.status === "pending") {
+      const w = (deal as { weight_gm?: number })?.weight_gm;
+      await notifyAdmins({
+        title: "Deal needs approval",
+        body: `A deal${typeof w === "number" ? ` for ${w}g` : ""} is awaiting your approval.`,
+        url: "/deals",
+      });
+    }
+
     return NextResponse.json({ deal }, { status: 201 });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Create failed";

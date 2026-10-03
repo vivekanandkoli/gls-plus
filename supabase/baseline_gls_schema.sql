@@ -63,6 +63,16 @@ CREATE TABLE IF NOT EXISTS "gls"."clients" (
     "notes" "text"
 );
 
+CREATE TABLE IF NOT EXISTS "gls"."push_subscriptions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" integer,
+    "endpoint" "text" NOT NULL,
+    "p256dh" "text" NOT NULL,
+    "auth" "text" NOT NULL,
+    "user_agent" "text",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
 
 ALTER TABLE "gls"."clients" OWNER TO "postgres";
 

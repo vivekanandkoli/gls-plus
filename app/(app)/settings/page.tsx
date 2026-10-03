@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NotificationsToggle } from "@/components/pwa/NotificationsToggle";
 import {
   Form,
   FormControl,
@@ -693,6 +694,21 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Notifications */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-sm">Notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Get a push notification on this device when a transaction or deal is submitted
+            and needs approval. On iPhone, open GLS Plus from your Home Screen first, then
+            enable.
+          </p>
+          <NotificationsToggle />
+        </CardContent>
+      </Card>
 
       {/* Audit Log */}
       <Card className="mt-6">
