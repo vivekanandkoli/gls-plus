@@ -97,6 +97,15 @@ export function TransactionFormDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Inline editing of the selected client's billing details.
+  const [clientOverrides, setClientOverrides] = useState<Record<string, Partial<Client>>>({});
+  const [editingClient, setEditingClient] = useState(false);
+  const [clientForm, setClientForm] = useState({ tax_id: "", address: "", phone: "", email: "" });
+  const [clientSaving, setClientSaving] = useState(false);
+  const [clientSaveError, setClientSaveError] = useState<string | null>(null);
+  const setCf = (k: keyof typeof clientForm, v: string) =>
+    setClientForm((f) => ({ ...f, [k]: v }));
+
   // form fields
   const [form, setForm] = useState<Record<string, string>>(() =>
     isCreate ? blankForm() : {}
@@ -167,9 +176,62 @@ export function TransactionFormDialog({
     () => clients.find((c) => c.id === form.clientId) ?? null,
     [clients, form.clientId]
   );
+  // Merge in any edits made inline this session so the display stays fresh.
+  const displayClient = useMemo(() => {
+    if (!selectedClient) return null;
+    return { ...selectedClient, ...(clientOverrides[selectedClient.id] ?? {}) };
+  }, [selectedClient, clientOverrides]);
   const hasClientDetails =
-    !!selectedClient &&
-    !!(selectedClient.tax_id || selectedClient.address || selectedClient.phone || selectedClient.email);
+    !!displayClient &&
+    !!(displayClient.tax_id || displayClient.address || displayClient.phone || displayClient.email);
+
+  // Reset the inline client editor whenever the selected client changes.
+  useEffect(() => {
+    setEditingClient(false);
+    setClientSaveError(null);
+  }, [form.clientId]);
+
+  function startEditClient() {
+    if (!displayClient) return;
+    setClientForm({
+      tax_id: displayClient.tax_id ?? "",
+      address: displayClient.address ?? "",
+      phone: displayClient.phone ?? "",
+      email: displayClient.email ?? "",
+    });
+    setClientSaveError(null);
+    setEditingClient(true);
+  }
+
+  async function saveClient() {
+    if (!selectedClient) return;
+    setClientSaving(true);
+    setClientSaveError(null);
+    try {
+      const res = await fetch(`/api/clients/${selectedClient.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: selectedClient.name, ...clientForm }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to save client");
+      const updated = d.client as Client;
+      setClientOverrides((m) => ({
+        ...m,
+        [selectedClient.id]: {
+          tax_id: updated.tax_id,
+          address: updated.address,
+          phone: updated.phone,
+          email: updated.email,
+        },
+      }));
+      setEditingClient(false);
+    } catch (e) {
+      setClientSaveError(e instanceof Error ? e.message : "Failed to save client");
+    } finally {
+      setClientSaving(false);
+    }
+  }
 
   // keep amount in sync when weight/rate change
   const autoAmount = useMemo(() => {
@@ -332,32 +394,78 @@ export function TransactionFormDialog({
 
             {selectedClient ? (
               <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
-                <div className="mb-1 font-medium text-muted-foreground">
-                  Client details{!hasClientDetails ? " — none on file yet" : ""}
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="font-medium text-muted-foreground">
+                    Client details{!hasClientDetails && !editingClient ? " — none on file yet" : ""}
+                  </span>
+                  {!editingClient ? (
+                    <button
+                      type="button"
+                      onClick={startEditClient}
+                      className="font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      Edit client details
+                    </button>
+                  ) : null}
                 </div>
-                <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
-                  <div>
-                    <span className="text-muted-foreground">Tax ID: </span>
-                    <span className="font-mono">{selectedClient.tax_id || "—"}</span>
+
+                {editingClient ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-muted-foreground">Tax ID</span>
+                        <Input value={clientForm.tax_id} onChange={(e) => setCf("tax_id", e.target.value)} className="h-8" />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-muted-foreground">Phone</span>
+                        <Input value={clientForm.phone} onChange={(e) => setCf("phone", e.target.value)} className="h-8" />
+                      </label>
+                      <label className="flex flex-col gap-1 sm:col-span-2">
+                        <span className="text-muted-foreground">Email</span>
+                        <Input value={clientForm.email} onChange={(e) => setCf("email", e.target.value)} className="h-8" />
+                      </label>
+                      <label className="flex flex-col gap-1 sm:col-span-2">
+                        <span className="text-muted-foreground">Address</span>
+                        <Textarea value={clientForm.address} onChange={(e) => setCf("address", e.target.value)} rows={2} />
+                      </label>
+                    </div>
+                    {clientSaveError ? <p className="text-red-600">{clientSaveError}</p> : null}
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" size="sm" variant="outline" className="h-7" onClick={() => setEditingClient(false)} disabled={clientSaving}>
+                        Cancel
+                      </Button>
+                      <Button type="button" size="sm" className="h-7" onClick={saveClient} disabled={clientSaving}>
+                        {clientSaving ? "Saving…" : "Save client"}
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Phone: </span>
-                    <span>{selectedClient.phone || "—"}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Email: </span>
-                    <span>{selectedClient.email || "—"}</span>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="text-muted-foreground">Address: </span>
-                    <span>{selectedClient.address || "—"}</span>
-                  </div>
-                </div>
-                {!hasClientDetails ? (
-                  <p className="mt-1.5 text-muted-foreground">
-                    Add these on the client&apos;s page (Clients → open → Edit Client); they appear on the invoice.
-                  </p>
-                ) : null}
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                      <div>
+                        <span className="text-muted-foreground">Tax ID: </span>
+                        <span className="font-mono">{displayClient?.tax_id || "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Phone: </span>
+                        <span>{displayClient?.phone || "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Email: </span>
+                        <span>{displayClient?.email || "—"}</span>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="text-muted-foreground">Address: </span>
+                        <span>{displayClient?.address || "—"}</span>
+                      </div>
+                    </div>
+                    {!hasClientDetails ? (
+                      <p className="mt-1.5 text-muted-foreground">
+                        Use “Edit client details” to add Tax ID, address and contact — they appear on the invoice.
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </div>
             ) : null}
 
@@ -399,7 +507,7 @@ export function TransactionFormDialog({
           <div className="flex gap-2">
             {!isCreate && tx?.invoice_number ? (
               <Button variant="outline" asChild>
-                <Link href={`/invoice/${id}`} target="_blank" rel="noopener noreferrer">
+                <Link href={`/invoice/${id}`}>
                   <FileText className="mr-1.5 h-3.5 w-3.5" />
                   View Invoice
                 </Link>

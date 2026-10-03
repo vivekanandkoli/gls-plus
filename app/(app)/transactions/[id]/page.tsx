@@ -39,6 +39,7 @@ type TxDetail = {
 };
 
 type ClientRel = {
+  id: string;
   name: string;
   address?: string | null;
   tax_id?: string | null;
@@ -86,7 +87,7 @@ export default function TransactionDetailPage() {
         const { data, error } = await supabase
           .from("transactions")
           .select(
-            `id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,status,created_by,rejection_reason${wacSelect},client:clients(name,address,tax_id,phone,email)`
+            `id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,status,created_by,rejection_reason${wacSelect},client:clients(id,name,address,tax_id,phone,email)`
           )
           .eq("id", id)
           .single();
@@ -223,9 +224,14 @@ export default function TransactionDetailPage() {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            {client?.id && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/clients/${client.id}`}>Edit client</Link>
+              </Button>
+            )}
             {tx.invoice_number && (
               <Button asChild size="sm" variant="outline">
-                <Link href={`/invoice/${tx.id}`} target="_blank" rel="noopener noreferrer">
+                <Link href={`/invoice/${tx.id}`}>
                   <FileText className="mr-1.5 h-3.5 w-3.5" />
                   View Invoice
                 </Link>
