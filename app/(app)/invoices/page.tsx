@@ -331,7 +331,63 @@ export default function InvoicesPage() {
         <div className={cn("min-w-0", selectedTx ? "lg:w-[420px] lg:shrink-0" : "w-full")}>
           <Card>
             <CardContent className="p-0">
-              <div className="rounded-lg overflow-hidden border bg-card">
+              {/* Mobile: tap-friendly invoice cards */}
+              <div className="md:hidden px-3 pt-1">
+                {rows.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground">
+                    {loading ? "Loading…" : "No invoices found."}
+                  </div>
+                ) : (
+                  <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                    {rows.map((r) => {
+                      const isActive = selectedTx?.id === r.id;
+                      return (
+                        <li key={r.id}>
+                          <button
+                            onClick={() => openInvoice(r)}
+                            className={cn(
+                              "flex w-full items-center justify-between gap-3 py-3 text-left active:bg-muted/50",
+                              isActive && "bg-primary/5"
+                            )}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-semibold">{r.invoice_number ?? "-"}</span>
+                                <Badge
+                                  className={cn(
+                                    "h-4 px-1.5 text-[10px]",
+                                    r.type === "BUY"
+                                      ? "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                      : "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100"
+                                  )}
+                                >
+                                  {r.type}
+                                </Badge>
+                              </div>
+                              <div className="mt-0.5 truncate text-sm font-medium text-foreground">
+                                {embeddedClientName(r.client) ?? "-"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">{r.date}</div>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <div className="text-sm font-semibold tabular-nums">
+                                {r.amount_thb != null ? formatCurrency(r.amount_thb, "THB", "th-TH") : "-"}
+                              </div>
+                              <div className="mt-1 inline-flex items-center gap-1 text-xs text-primary">
+                                <Printer className="h-3 w-3" />
+                                Open
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {/* Desktop: full table */}
+              <div className="hidden md:block rounded-lg overflow-hidden border bg-card">
                 <Table>
                   <TableHeader>
                     <TableRow>
