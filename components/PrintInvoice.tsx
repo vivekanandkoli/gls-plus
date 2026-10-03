@@ -96,11 +96,13 @@ export function InvoiceDocument({
 
   const companyEn = settings.company_name_en ?? "GLS PLUS CO., LTD.";
   const companyTh = settings.company_name_th ?? "บริษัท จีแอลเอส พลัส จำกัด";
-  const addressEn = settings.address_en ?? "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31, KWAENG OOKMAI, KHET PRAWET, BANGKOK 10250";
+  const addressEn = settings.address_en ?? "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31 KWAENG DOKMAI, KHET PRAWET, BANGKOK 10250";
   const addressTh = settings.address_th ?? "66/22 ซ. 31 เจมโมโปลิส เขตประเวศ กรุงเทพฯ 10250";
   const phone = settings.phone ?? "087-039-8795";
   const email = settings.email ?? "glsplusdb@gmail.com";
   const taxId = settings.tax_id ?? "0105563120430";
+  // Fall back to the bundled company logo when no custom logo is stored in settings.
+  const logoSrc = settings.logo_data_url?.trim() ? settings.logo_data_url : "/logo.png";
 
   const particulars = tx.type === "BUY"
     ? "Pure gold (99.99%) Purchase"
@@ -219,9 +221,9 @@ export function InvoiceDocument({
       <div style={s.headerRow}>
         {/* Left: Company info */}
         <div style={s.companyBlock}>
-          {settings.logo_data_url && (
+          {logoSrc && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={settings.logo_data_url} alt="logo" style={{ height: "44px", marginBottom: "6px" }} />
+            <img src={logoSrc} alt="logo" style={{ height: "44px", marginBottom: "6px" }} />
           )}
           <div style={s.companyNameTh}>{companyTh}</div>
           <div style={s.companyNameEn}>{companyEn}</div>
@@ -292,8 +294,8 @@ export function InvoiceDocument({
           <tr>
             <th style={{ ...s.th, width: "70px" }}>รหัส<br />Code</th>
             <th style={s.th}>รายการ / Particulars</th>
-            <th style={{ ...s.thRight, width: "120px" }}>น้ำหนัก (กรัม)<br />Weight (gram)</th>
             <th style={{ ...s.thRight, width: "110px" }}>ราคา/หน่วย<br />Unit/Price</th>
+            <th style={{ ...s.thRight, width: "120px" }}>น้ำหนัก (กรัม)<br />Weight (gram)</th>
             <th style={{ ...s.thRight, width: "110px" }}>จำนวนเงิน<br />Amount</th>
           </tr>
         </thead>
@@ -304,8 +306,8 @@ export function InvoiceDocument({
               <div style={{ fontWeight: 600 }}>{particulars}</div>
               {tx.notes && <div style={{ fontSize: "10px", color: "#666", marginTop: "2px" }}>{tx.notes}</div>}
             </td>
-            <td style={s.tdRight}>{fmtNum(tx.weight_grams, 4)}</td>
             <td style={s.tdRight}>{fmtNum(tx.rate_per_gram, 2)}</td>
+            <td style={s.tdRight}>{fmtNum(tx.weight_grams, 4)}</td>
             <td style={s.tdRight}>{fmtNum(subtotal, 2)}</td>
           </tr>
           {/* Blank filler rows for visual space (hidden when printing so both copies fit one A4 each) */}

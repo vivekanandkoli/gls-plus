@@ -32,7 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getSupabaseClient } from "@/lib/supabase";
-import { cn, embeddedClientName, formatCurrency } from "@/lib/utils";
+import { cn, embedFkOne, embeddedClientName, formatCurrency } from "@/lib/utils";
 import {
   InvoiceDocument,
   InvoicePrintSet,
@@ -52,7 +52,10 @@ type TxRow = {
   amount_thb: number | null;
   vat_percent: number | null;
   notes: string | null;
-  client: { name: string } | { name: string }[] | null;
+  client:
+    | { name: string; address: string | null; tax_id: string | null }
+    | { name: string; address: string | null; tax_id: string | null }[]
+    | null;
 };
 
 // ─── Debounce hook ────────────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ const PAGE_SIZE = 30;
 const DEFAULT_SETTINGS: Settings = {
   company_name_en: "GLS PLUS CO., LTD.",
   company_name_th: "บริษัท จีแอลเอส พลัส จำกัด",
-  address_en: "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31, KWAENG OOKMAI, KHET PRAWET, BANGKOK 10250",
+  address_en: "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31 KWAENG DOKMAI, KHET PRAWET, BANGKOK 10250",
   address_th: "66/22 ซ. 31 เจมโมโปลิส เขตประเวศ กรุงเทพฯ 10250",
   phone: "087-039-8795",
   email: "glsplusdb@gmail.com",
@@ -194,6 +197,10 @@ export default function InvoicesPage() {
   }, []);
 
   // Load company settings once.
+  // NOTE: the `gls.settings` table stores company info under its own column
+  // names (company_name, address_1/2, logo_url, invoice_footer); map those onto
+  // the invoice's Settings shape. Any field left blank falls back to the
+  // hardcoded DEFAULT_SETTINGS below.
   useEffect(() => {
     if (!canQuery) return;
     const run = async () => {
@@ -201,11 +208,23 @@ export default function InvoicesPage() {
         const supabase = getSupabaseClient() as any;
         const { data } = await supabase
           .from("settings")
-          .select("company_name_en,company_name_th,address_en,address_th,phone,email,tax_id,invoice_footer_note,logo_data_url")
+          .select("company_name,company_name_th,address_1,address_2,phone,email,tax_id,invoice_footer,logo_url")
           .limit(1)
           .maybeSingle();
-        if (data) setSettings(data as Settings);
-      } catch { /* ignore */ }
+        if (!data) return;
+        const addressEn = [data.address_1, data.address_2].filter(Boolean).join(", ");
+        setSettings((prev) => ({
+          company_name_en: data.company_name || prev.company_name_en,
+          company_name_th: data.company_name_th || prev.company_name_th,
+          address_en: addressEn || prev.address_en,
+          address_th: prev.address_th,
+          phone: data.phone || prev.phone,
+          email: data.email || prev.email,
+          tax_id: data.tax_id || prev.tax_id,
+          invoice_footer_note: data.invoice_footer || prev.invoice_footer_note,
+          logo_data_url: data.logo_url || prev.logo_data_url,
+        }));
+      } catch { /* ignore — defaults apply */ }
     };
     void run();
   }, [canQuery]);
@@ -215,7 +234,7 @@ export default function InvoicesPage() {
     let q2 = supabase
       .from("transactions")
       .select(
-        "id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,client:clients(name)",
+        "id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,client:clients(name,address,tax_id)",
         { count: "exact" }
       )
       .not("invoice_number", "is", null);
@@ -248,6 +267,7 @@ export default function InvoicesPage() {
 
   // When a row is clicked, fetch full detail and open preview.
   const openInvoice = useCallback(async (row: TxRow) => {
+    const client = embedFkOne(row.client);
     const clientName = embeddedClientName(row.client) ?? "-";
     setSelectedTx({
       id: row.id,
@@ -260,6 +280,8 @@ export default function InvoicesPage() {
       vat_percent: row.vat_percent,
       notes: row.notes,
       clientName,
+      clientAddress: client?.address ?? null,
+      clientTaxId: client?.tax_id ?? null,
     });
   }, []);
 

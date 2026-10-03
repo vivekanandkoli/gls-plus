@@ -57,7 +57,10 @@ CREATE TABLE IF NOT EXISTS "gls"."clients" (
     "name" "text" NOT NULL,
     "phone" "text",
     "email" "text",
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "tax_id" "text",
+    "address" "text",
+    "notes" "text"
 );
 
 
