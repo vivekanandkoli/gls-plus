@@ -509,7 +509,7 @@ export default function ManagePlPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="overflow-x-auto p-0">
-              <Table>
+              <Table className="table-cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>

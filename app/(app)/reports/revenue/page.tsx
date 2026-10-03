@@ -246,7 +246,7 @@ export default function RevenueReportPage() {
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border bg-card">
-            <Table>
+            <Table className="table-cards">
               <TableHeader>
                 <TableRow>
                   <TableHead>Month</TableHead>

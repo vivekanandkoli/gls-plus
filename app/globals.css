@@ -266,4 +266,63 @@ body {
   .app-content {
     padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
   }
+
+  /* Turn wide report tables into stacked, labelled cards on phones so they
+     never need a sideways scroll. Each row becomes a card; each cell shows
+     its column name (from data-label, filled in by TableCardLabels) on the
+     left and its value on the right. */
+  table.table-cards thead {
+    display: none;
+  }
+  table.table-cards,
+  table.table-cards tbody,
+  table.table-cards tfoot {
+    display: block;
+    width: 100%;
+  }
+  table.table-cards tr {
+    display: block;
+    margin-bottom: 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    background: var(--card);
+    padding: 0.35rem 0.85rem;
+  }
+  table.table-cards td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.3rem 0 !important;
+    border: none !important;
+    text-align: right !important;
+    white-space: normal !important;
+  }
+  table.table-cards td + td {
+    border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent) !important;
+  }
+  table.table-cards td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    text-align: left;
+    flex-shrink: 0;
+  }
+  /* A full-width cell (empty-state / "no rows") shouldn't look like a card row. */
+  table.table-cards tr.table-cards-plain {
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+  table.table-cards tr.table-cards-plain td {
+    justify-content: center;
+    text-align: center !important;
+  }
+  table.table-cards tr.table-cards-plain td::before {
+    content: none;
+  }
 }

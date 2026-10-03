@@ -245,7 +245,93 @@ export default function DealsPage() {
       {/* ── Table ── */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          {/* Mobile: tap-friendly deal cards */}
+          <div className="md:hidden px-4">
+            {loading ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">Loading...</div>
+            ) : error ? (
+              <div className="py-10 text-center text-sm text-red-500">{error}</div>
+            ) : filtered.length === 0 ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">No deals found.</div>
+            ) : (
+              <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                {filtered.map((d) => {
+                  const profit = typeof d.trading_profit === "number" ? d.trading_profit : 0;
+                  const profitPct = typeof d.profit_pct === "number" ? d.profit_pct : 0;
+                  const isPositive = profit >= 0;
+                  return (
+                    <li key={d.id} className="py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-foreground">
+                            {d.sell_client?.name ?? "-"}
+                          </div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                            from {d.buy_client?.name ?? "-"}
+                          </div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">{d.date}</div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-sm font-semibold tabular-nums">
+                            {typeof d.sell_amount === "number" ? formatCurrency(d.sell_amount, "THB", "th-TH") : "-"}
+                          </div>
+                          <div className="text-xs tabular-nums text-muted-foreground">
+                            {typeof d.weight_gm === "number" ? d.weight_gm.toLocaleString(undefined, { minimumFractionDigits: 3 }) : "-"} g
+                            {typeof d.sell_rate === "number" ? ` · ${d.sell_rate.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : ""}
+                          </div>
+                          {isAdmin ? (
+                            <div className={cn("text-xs font-semibold tabular-nums", isPositive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400")}>
+                              {isPositive ? "+" : ""}
+                              {formatCurrency(profit, "THB", "th-TH")} ({profitPct.toFixed(2)}%)
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <PaymentBadge mode={d.payment_mode as PaymentMode} />
+                          <StatusBadge status={d.status} />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {isAdmin && d.status === "pending" && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                onClick={() => setApproveId(d.id)}
+                              >
+                                ✓
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-red-700 border-red-300 hover:bg-red-50"
+                                onClick={() => setRejectId(d.id)}
+                              >
+                                ✕
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-red-600"
+                            onClick={() => setDeleteId(d.id)}
+                          >
+                            Del
+                          </Button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Desktop: full table */}
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

@@ -242,7 +242,7 @@ export default function StockMovementReportPage() {
         </CardHeader>
         <CardContent>
           <div className="max-h-96 overflow-y-auto rounded-lg border bg-card">
-            <Table>
+            <Table className="table-cards">
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>

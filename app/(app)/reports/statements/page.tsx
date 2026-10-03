@@ -83,7 +83,7 @@ const YEARS = Array.from({ length: 6 }, (_, i) => CUR_YEAR - i);
 function TxTable({ rows }: { rows: StatementRow[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border">
-      <Table className="text-xs">
+      <Table className="text-xs table-cards">
         <TableHeader>
           <TableRow>
             <TableHead className="w-[90px]">Date</TableHead>
@@ -895,7 +895,7 @@ function AnnualTab() {
 
             {/* Month table */}
             <div className="overflow-x-auto rounded-lg border">
-              <Table className="text-xs">
+              <Table className="text-xs table-cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Month</TableHead>

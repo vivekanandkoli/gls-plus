@@ -224,7 +224,7 @@ export default function CashReportPage() {
             <div className="py-12 text-center text-sm text-muted-foreground">No cash transactions found for this period.</div>
           ) : (
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="table-cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>

@@ -239,7 +239,7 @@ export default function RateTrendReportPage() {
         </CardHeader>
         <CardContent>
           <div className="rounded-lg border bg-card">
-            <Table>
+            <Table className="table-cards">
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>

@@ -1,6 +1,7 @@
 import { BottomTabBar } from "@/components/layout/BottomTabBar";
 import { AppCommandPalette } from "@/components/layout/AppCommandPalette";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { TableCardLabels } from "@/components/layout/TableCardLabels";
 
 export default function AppLayout({
   children,
@@ -14,6 +15,7 @@ export default function AppLayout({
         <AppCommandPalette />
         {children}
         <BottomTabBar />
+        <TableCardLabels />
       </div>
     </div>
   );
