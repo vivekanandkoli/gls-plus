@@ -224,7 +224,7 @@ export default function InvoicesPage() {
           invoice_footer_note: data.invoice_footer || prev.invoice_footer_note,
           logo_data_url: data.logo_url || prev.logo_data_url,
         }));
-      } catch { /* ignore — defaults apply */ }
+      } catch { /* ignore - defaults apply */ }
     };
     void run();
   }, [canQuery]);

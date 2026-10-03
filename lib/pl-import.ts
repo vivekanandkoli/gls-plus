@@ -1,6 +1,6 @@
 /**
  * P/L adjustment workbook parser and profit calculations.
- * Expected sheet layout matches `pl adjustment.xlsx` — "Transaction Log" sheet.
+ * Expected sheet layout matches `pl adjustment.xlsx` - "Transaction Log" sheet.
  */
 
 import * as XLSX from "xlsx";

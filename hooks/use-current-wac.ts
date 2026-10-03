@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { OPENING_STOCK_GM, OPENING_WAC } from "@/lib/wac-ledger";
 
-/** Lightweight hook for SELL preview — reads current WAC and stock from the server. */
+/** Lightweight hook for SELL preview - reads current WAC and stock from the server. */
 export function useCurrentWac() {
   const [currentWac, setCurrentWac] = useState(OPENING_WAC);
   const [stockGm, setStockGm] = useState(OPENING_STOCK_GM);

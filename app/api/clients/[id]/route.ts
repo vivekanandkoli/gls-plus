@@ -10,7 +10,7 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-/** GET /api/clients/[id] — one client. */
+/** GET /api/clients/[id] - one client. */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -32,7 +32,7 @@ export async function GET(
   }
 }
 
-/** PATCH /api/clients/[id] — update a client. Writes run server-side via
+/** PATCH /api/clients/[id] - update a client. Writes run server-side via
  *  service_role because RLS has no client write policy. */
 export async function PATCH(
   req: Request,

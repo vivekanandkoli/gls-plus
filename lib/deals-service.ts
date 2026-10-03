@@ -1,5 +1,5 @@
 /**
- * Deals service — core business logic for the deals table.
+ * Deals service - core business logic for the deals table.
  * One deal = one buy + one sell, same weight, same day.
  */
 
@@ -138,19 +138,19 @@ export function computeDealFields(weightGm: number, buyRate: number, sellRate: n
  * Recompute WAC P&L for ALL approved non-cash deals and write the results back.
  *
  * Called after:
- *   • approveDeal  — newly approved deal joins the WAC chain; all subsequent deals shift
- *   • createDeal   — when admin creates (immediately approved); same as above
- *   • deleteDeal   — approved non-cash deal removed; all subsequent deals shift
+ *   • approveDeal  - newly approved deal joins the WAC chain; all subsequent deals shift
+ *   • createDeal   - when admin creates (immediately approved); same as above
+ *   • deleteDeal   - approved non-cash deal removed; all subsequent deals shift
  *
  * Cash deals are never touched (computeDealsWacPl filters them out).
- * The full recalculation is intentional — a single new approval can shift every
+ * The full recalculation is intentional - a single new approval can shift every
  * downstream WAC value, so a partial update would leave stale data.
  */
 async function recalculateDealsWac(supabase: ServiceClient): Promise<void> {
   const plMap = await computeDealsWacPl(supabase as any);
   if (plMap.size === 0) return;
 
-  // Parallel updates — each is a targeted UPDATE … WHERE id = ?
+  // Parallel updates - each is a targeted UPDATE … WHERE id = ?
   await Promise.all(
     Array.from(plMap.entries()).map(([id, vals]) =>
       (supabase as any)
@@ -245,7 +245,7 @@ export async function createDeal(
     newValues: data as Record<string, unknown>,
   });
 
-  // Admin-created deals are immediately approved — compute WAC now.
+  // Admin-created deals are immediately approved - compute WAC now.
   if (status === "approved" && !data.is_cash) {
     await recalculateDealsWac(supabase);
     const fresh = await fetchDeal(supabase, data.id);
@@ -336,7 +336,7 @@ export async function deleteDeal(dealId: number, user: AppUser): Promise<void> {
   const deal = await fetchDeal(supabase, dealId);
   if (!deal) throw new Error("Deal not found");
 
-  // Capture before delete — needed to decide whether to recalculate WAC.
+  // Capture before delete - needed to decide whether to recalculate WAC.
   const wasApprovedOfficial = deal.status === "approved" && !deal.is_cash;
 
   const { error } = await (supabase as any).from("deals").delete().eq("id", dealId);

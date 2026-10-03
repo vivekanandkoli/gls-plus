@@ -11,7 +11,7 @@ import {
 } from "@/lib/wac-ledger";
 import { getSupabaseClient } from "@/lib/supabase";
 
-/** Client-side WAC map — used when DB columns are not migrated yet. */
+/** Client-side WAC map - used when DB columns are not migrated yet. */
 export function useTransactionWac(enabled = true) {
   const [plById, setPlById] = useState<Map<string, WacPlEntry>>(new Map());
   const [currentWac, setCurrentWac] = useState(OPENING_WAC);

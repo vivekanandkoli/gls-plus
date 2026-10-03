@@ -4,7 +4,7 @@
  *
  * Two-ledger model: each `book` (official | unofficial) runs its OWN WAC chain
  * from its OWN per-year opening balance (see `opening_balances`). The engine here
- * is book-agnostic — pass the relevant opening balance and the transactions for
+ * is book-agnostic - pass the relevant opening balance and the transactions for
  * that book. The legacy single-ledger constants below are kept only as a default
  * for not-yet-migrated callers.
  */

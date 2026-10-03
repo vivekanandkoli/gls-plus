@@ -396,7 +396,7 @@ export function TransactionFormDialog({
               <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <span className="font-medium text-muted-foreground">
-                    Client details{!hasClientDetails && !editingClient ? " — none on file yet" : ""}
+                    Client details{!hasClientDetails && !editingClient ? " - none on file yet" : ""}
                   </span>
                   {!editingClient ? (
                     <button
@@ -444,24 +444,24 @@ export function TransactionFormDialog({
                     <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
                       <div>
                         <span className="text-muted-foreground">Tax ID: </span>
-                        <span className="font-mono">{displayClient?.tax_id || "—"}</span>
+                        <span className="font-mono">{displayClient?.tax_id || "-"}</span>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Phone: </span>
-                        <span>{displayClient?.phone || "—"}</span>
+                        <span>{displayClient?.phone || "-"}</span>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Email: </span>
-                        <span>{displayClient?.email || "—"}</span>
+                        <span>{displayClient?.email || "-"}</span>
                       </div>
                       <div className="sm:col-span-2">
                         <span className="text-muted-foreground">Address: </span>
-                        <span>{displayClient?.address || "—"}</span>
+                        <span>{displayClient?.address || "-"}</span>
                       </div>
                     </div>
                     {!hasClientDetails ? (
                       <p className="mt-1.5 text-muted-foreground">
-                        Use “Edit client details” to add Tax ID, address and contact — they appear on the invoice.
+                        Use “Edit client details” to add Tax ID, address and contact - they appear on the invoice.
                       </p>
                     ) : null}
                   </>

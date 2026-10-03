@@ -19,7 +19,7 @@ export function getSupabaseBrowserConfigError(): string | null {
 export function getSupabaseClient() {
   if (_client) return _client;
 
-  // Browser bundles only include NEXT_PUBLIC_* — add these to .env.local (not just SUPABASE_URL).
+  // Browser bundles only include NEXT_PUBLIC_* - add these to .env.local (not just SUPABASE_URL).
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";

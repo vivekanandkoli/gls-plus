@@ -63,8 +63,8 @@ const WAC_SELECT = "id,date,type,weight_grams,rate_per_gram,amount_thb,status,cr
 
 /** Fetch approved transactions in chronological order for WAC calculation.
  *
- * @param opts.approvedOnly  default true — only approved transactions
- * @param opts.officialOnly  default false — when true, excludes cash transactions
+ * @param opts.approvedOnly  default true - only approved transactions
+ * @param opts.officialOnly  default false - when true, excludes cash transactions
  *                           (use for official WAC / CA statements)
  */
 export async function fetchAllTransactionsForWacWithClient(

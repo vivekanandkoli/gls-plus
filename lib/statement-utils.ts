@@ -24,7 +24,7 @@ export type RawTxForStatement = {
   weight_grams: number | null;
   rate_per_gram: number | null;
   amount_thb: number | null;
-  /** 'official' | 'cash' — cash transactions are excluded from CA statements. */
+  /** 'official' | 'cash' - cash transactions are excluded from CA statements. */
   transaction_mode?: string | null;
   /** Pre-computed DB column (optional). */
   wac_at_sale?: number | null;
@@ -107,7 +107,7 @@ export type ClientStatementPayload = {
     totalValue: number;
     avgRate: number | null;
     totalProfitLoss: number;
-    /** Outstanding buy weight (unpaid BUYs are not tracked here — all txs are approved). */
+    /** Outstanding buy weight (unpaid BUYs are not tracked here - all txs are approved). */
   };
 };
 
@@ -191,7 +191,7 @@ export function buildLedger(txs: RawTxForStatement[]): Map<string, LedgerEntry> 
         wacAfter: wac,
       });
     } else {
-      // SELL — prefer DB-computed values when present, else compute
+      // SELL - prefer DB-computed values when present, else compute
       const wacAtSale =
         tx.wac_at_sale != null ? tx.wac_at_sale : wac;
       const costOfSale =

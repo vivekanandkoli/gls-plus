@@ -132,7 +132,7 @@ export async function fetchStockAdjustmentTotal(
 export interface BookState extends WacInventoryState {
   book: Book;
   year: number;
-  /** WAC-derived stock plus manual adjustments — the counted-vault figure. */
+  /** WAC-derived stock plus manual adjustments - the counted-vault figure. */
   physicalStockGm: number;
   adjustmentGm: number;
 }

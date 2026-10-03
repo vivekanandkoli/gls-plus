@@ -10,7 +10,7 @@ function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-/** POST /api/clients — create a client. Writes run server-side via service_role
+/** POST /api/clients - create a client. Writes run server-side via service_role
  *  because RLS has no client write policy (all writes bypass RLS here). */
 export async function POST(req: Request) {
   const user = await requireAppUser();

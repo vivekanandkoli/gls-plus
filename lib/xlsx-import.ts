@@ -1,6 +1,6 @@
 /**
  * Browser-safe Excel import parsing library.
- * Ported from scripts/migrate.ts — no Node.js APIs used.
+ * Ported from scripts/migrate.ts - no Node.js APIs used.
  */
 
 import * as XLSX from "xlsx";
@@ -140,7 +140,7 @@ export function parseWorkbook(
   buffer: ArrayBuffer,
   sheetName?: string
 ): ParseResult {
-  // IMPORTANT: no cellDates — serial numbers are timezone-safe via SSF.parse_date_code
+  // IMPORTANT: no cellDates - serial numbers are timezone-safe via SSF.parse_date_code
   const wb = XLSX.read(buffer, { type: "array" });
 
   const sheetNames = wb.SheetNames;
@@ -175,7 +175,7 @@ export function parseWorkbook(
     const dateIso = parseExcelDate(getCell(`A${r}`));
     const rawName = toStringOrNull(getCell(`B${r}`));
 
-    // Empty row — skip silently.
+    // Empty row - skip silently.
     if (!dateIso && !rawName) continue;
 
     const rowIssues: string[] = [];
@@ -229,11 +229,11 @@ export function parseWorkbook(
       const amtVal = toNumber(getCell(amtColRaw));
 
       if (isFormulaUncached(rawRate)) {
-        issues.push(`${txType} rate cell (${rateColRaw}) has an uncached formula — open and save the Excel file to cache values`);
+        issues.push(`${txType} rate cell (${rateColRaw}) has an uncached formula - open and save the Excel file to cache values`);
         hasRowError = true;
       }
       if (isFormulaUncached(rawAmt)) {
-        issues.push(`${txType} amount cell (${amtColRaw}) has an uncached formula — open and save the Excel file to cache values`);
+        issues.push(`${txType} amount cell (${amtColRaw}) has an uncached formula - open and save the Excel file to cache values`);
         hasRowError = true;
       }
 
@@ -258,11 +258,11 @@ export function parseWorkbook(
       }
 
       if (finalRate === null) {
-        issues.push(`Missing ${txType} rate per gram (${rateColRaw}) — cannot derive without amount`);
+        issues.push(`Missing ${txType} rate per gram (${rateColRaw}) - cannot derive without amount`);
         hasRowError = true;
       }
       if (finalAmt === null) {
-        issues.push(`Missing ${txType} amount THB (${amtColRaw}) — cannot derive without rate`);
+        issues.push(`Missing ${txType} amount THB (${amtColRaw}) - cannot derive without rate`);
         hasRowError = true;
       }
 
