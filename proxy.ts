@@ -8,6 +8,8 @@ const PUBLIC_PATHS = [
   "/offline",
   "/manifest.webmanifest",
   "/sw.js",
+  // Public health probe (keep-alive / uptime).
+  "/api/health",
 ];
 
 export async function proxy(request: NextRequest) {

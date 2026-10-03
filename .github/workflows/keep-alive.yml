@@ -1,0 +1,29 @@
+name: Keep Supabase awake
+
+# Free Supabase projects pause after ~7 days of inactivity, which breaks the
+# app. This pings the public health endpoint (which does a tiny DB read) daily
+# so the project stays active. Also a lightweight uptime check.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # every day at 06:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        env:
+          # Override with a repo variable if the domain changes.
+          HEALTH_URL: ${{ vars.HEALTH_URL || 'https://gls-plus.vercel.app/api/health' }}
+        run: |
+          echo "Pinging $HEALTH_URL"
+          code=$(curl -s -o /tmp/health.json -w "%{http_code}" "$HEALTH_URL" || echo "000")
+          echo "HTTP $code"
+          cat /tmp/health.json || true
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::Health check failed (HTTP $code)"
+            exit 1
+          fi

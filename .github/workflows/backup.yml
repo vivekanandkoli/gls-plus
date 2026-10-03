@@ -1,0 +1,53 @@
+name: Supabase backup
+
+# Daily logical backup of the business data (the `gls` schema: transactions,
+# clients, settings, opening balances, etc.). Supabase's free tier has no
+# reliable automated backup, so this is the safety net.
+#
+# The dump is stored as a build artifact (retained 90 days). Download the
+# latest from the run's "Artifacts" section; restore with:
+#   gunzip -c gls-backup-YYYY-MM-DD.sql.gz | psql "<your DB connection string>"
+#
+# Requires repo secret SUPABASE_DB_URL = the Session-pooler connection URI from
+# Supabase → Project Settings → Database → Connection string (URI), with the
+# password filled in.
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # every day at 02:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump gls schema
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not set"
+            exit 1
+          fi
+          STAMP="$(date -u +%F)"
+          OUT="gls-backup-${STAMP}.sql.gz"
+          # pg_dump via the official postgres image so the client version always
+          # matches/exceeds the server. --schema=gls captures all business data.
+          docker run --rm -e PGURL="$SUPABASE_DB_URL" postgres:17 \
+            sh -c 'pg_dump "$PGURL" --schema=gls --no-owner --no-privileges' \
+            | gzip > "$OUT"
+          SIZE=$(stat -c%s "$OUT")
+          echo "Wrote $OUT ($SIZE bytes)"
+          # Guard against an empty/failed dump being uploaded as a "backup".
+          if [ "$SIZE" -lt 500 ]; then
+            echo "::error::Backup looks too small ($SIZE bytes) — dump likely failed"
+            exit 1
+          fi
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gls-backup-${{ github.run_id }}
+          path: ${{ env.OUT }}
+          retention-days: 90
