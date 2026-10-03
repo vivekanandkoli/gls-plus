@@ -203,9 +203,9 @@ export default function TransactionsPage() {
       <Card>
         <CardContent className="p-0">
           {/* Mobile: tap-friendly card list */}
-          <div className="md:hidden">
+          <div className="md:hidden px-4">
             {loading && !data ? (
-              <div className="space-y-2 p-1">
+              <div className="space-y-2 py-1">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <Skeleton key={i} className="h-16 w-full rounded-lg" />
                 ))}

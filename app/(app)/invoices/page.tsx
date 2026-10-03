@@ -332,7 +332,7 @@ export default function InvoicesPage() {
           <Card>
             <CardContent className="p-0">
               {/* Mobile: tap-friendly invoice cards */}
-              <div className="md:hidden px-3 pt-1">
+              <div className="md:hidden px-4">
                 {rows.length === 0 ? (
                   <div className="py-12 text-center text-sm text-muted-foreground">
                     {loading ? "Loading…" : "No invoices found."}

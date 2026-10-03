@@ -176,33 +176,35 @@ export default function ClientsPage() {
           />
         ) : (
           <>
-          {/* Mobile: tap-friendly client cards */}
-          <div className="md:hidden space-y-2">
-            {clients.map((c) => {
-              const agg = txByClient[c.id] ?? { buyGrams: 0, sellGrams: 0, lastDate: null };
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => router.push(`/clients/${c.id}`)}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl border bg-card p-3 text-left shadow-[var(--shadow-sm)] active:bg-muted/50"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-foreground">{c.name}</div>
-                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {c.phone || c.email || "No contact info"}
-                    </div>
-                    <div className="mt-1 flex items-center gap-3 text-[11px]">
-                      <span className="text-emerald-600">BUY {agg.buyGrams.toLocaleString()}g</span>
-                      <span className="text-amber-700">SELL {agg.sellGrams.toLocaleString()}g</span>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right text-[11px] text-muted-foreground">
-                    {agg.lastDate ?? "—"}
-                  </div>
-                </button>
-              );
-            })}
+          {/* Mobile: tap-friendly client list */}
+          <div className="md:hidden rounded-xl border bg-card shadow-[var(--shadow-sm)]" style={{ borderColor: "var(--border)" }}>
+            <ul className="divide-y px-4" style={{ borderColor: "var(--border)" }}>
+              {clients.map((c) => {
+                const agg = txByClient[c.id] ?? { buyGrams: 0, sellGrams: 0, lastDate: null };
+                return (
+                  <li key={c.id}>
+                    <button
+                      onClick={() => router.push(`/clients/${c.id}`)}
+                      className="flex w-full items-center justify-between gap-3 py-3 text-left active:bg-muted/50"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-foreground">{c.name}</div>
+                        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {c.phone || c.email || "No contact info"}
+                        </div>
+                        <div className="mt-1 flex items-center gap-3 text-[11px]">
+                          <span className="text-emerald-600">BUY {agg.buyGrams.toLocaleString()}g</span>
+                          <span className="text-amber-700">SELL {agg.sellGrams.toLocaleString()}g</span>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right text-[11px] text-muted-foreground">
+                        {agg.lastDate ?? "—"}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
 
           {/* Desktop: full table */}
