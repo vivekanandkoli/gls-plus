@@ -93,6 +93,7 @@ export default function ClientDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const canQuery = useMemo(() => {
     try {
@@ -206,24 +207,28 @@ export default function ClientDetailPage() {
 
   const onSaveEdit = async (values: EditValues) => {
     setSaving(true);
+    setSaveError(null);
     try {
-      const supabase = getSupabaseClient() as any;
-      const { data, error } = await supabase
-        .from("clients")
-        .update({
-          name: values.name.trim(),
-          tax_id: values.tax_id?.trim() || null,
-          address: values.address?.trim() || null,
-          phone: values.phone?.trim() || null,
-          email: values.email?.trim() || null,
-          notes: values.notes?.trim() || null,
-        })
-        .eq("id", id)
-        .select("id,name,phone,email,tax_id,address,notes")
-        .single();
-      if (error) throw error;
-      setClient(data as Client);
+      // Writes go through the service-role API route (RLS blocks direct
+      // client-side writes).
+      const res = await fetch(`/api/clients/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: values.name,
+          tax_id: values.tax_id,
+          address: values.address,
+          phone: values.phone,
+          email: values.email,
+          notes: values.notes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save changes");
+      setClient(data.client as Client);
       setEditOpen(false);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save changes");
     } finally {
       setSaving(false);
     }
@@ -501,6 +506,10 @@ export default function ClientDetailPage() {
                   </FormItem>
                 )}
               />
+
+              {saveError && (
+                <p className="text-sm text-red-600" role="alert">{saveError}</p>
+              )}
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>

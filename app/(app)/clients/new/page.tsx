@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { getSupabaseClient } from "@/lib/supabase";
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -34,6 +33,7 @@ type Values = z.output<typeof schema>;
 export default function NewClientPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const form = useForm<Values>({
     resolver: zodResolver(schema) as any,
@@ -49,23 +49,20 @@ export default function NewClientPage() {
 
   const onSubmit = async (values: Values) => {
     setSaving(true);
+    setSaveError(null);
     try {
-      const supabase = getSupabaseClient() as any;
-      const { data, error } = await supabase
-        .from("clients")
-        .insert({
-          name: values.name.trim(),
-          tax_id: values.taxId?.trim() || null,
-          address: values.address?.trim() || null,
-          phone: values.phone?.trim() || null,
-          email: values.email?.trim() || null,
-          notes: values.notes?.trim() || null,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-      router.push(`/clients/${data.id}`);
-    } finally {
+      // Writes go through the service-role API route (RLS blocks direct
+      // client-side writes).
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to create client");
+      router.push(`/clients/${data.client.id}`);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to create client");
       setSaving(false);
     }
   };
@@ -165,6 +162,10 @@ export default function NewClientPage() {
                 </FormItem>
               )}
             />
+
+            {saveError && (
+              <p className="text-sm text-red-600" role="alert">{saveError}</p>
+            )}
 
             <div className="flex items-center justify-end gap-2">
               <Button type="submit" disabled={saving}>
