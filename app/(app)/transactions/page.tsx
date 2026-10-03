@@ -202,7 +202,69 @@ export default function TransactionsPage() {
 
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          {/* Mobile: tap-friendly card list */}
+          <div className="md:hidden">
+            {loading && !data ? (
+              <div className="space-y-2 p-1">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                No transactions match these filters.
+              </div>
+            ) : (
+              <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                {rows.map((r) => (
+                  <li key={r.id}>
+                    <button
+                      onClick={() => setEditId(r.id)}
+                      className="flex w-full items-start justify-between gap-3 py-3 text-left active:bg-muted/50"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("text-sm font-semibold", r.type === "BUY" ? "text-emerald-600" : "text-amber-700")}>
+                            {r.type}
+                          </span>
+                          <span className="truncate text-sm font-medium text-foreground">{r.client_name || "—"}</span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          <span>{formatDate(r.date, "dd MMM yyyy")}</span>
+                          <Badge variant={r.book === "unofficial" ? "secondary" : "outline"} className="h-4 px-1.5 text-[10px]">
+                            {r.book}
+                          </Badge>
+                          <Badge
+                            variant={r.status === "approved" ? "default" : r.status === "rejected" ? "destructive" : "secondary"}
+                            className="h-4 px-1.5 text-[10px]"
+                          >
+                            {r.status}
+                          </Badge>
+                        </div>
+                        {r.invoice_number ? (
+                          <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">{r.invoice_number}</div>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-sm font-semibold tabular-nums">{baht(r.amount_thb)}</div>
+                        <div className="text-xs tabular-nums text-muted-foreground">
+                          {grams(r.weight_grams)} · {rate(r.rate_per_gram)}
+                        </div>
+                        {r.type === "SELL" && r.profit_loss != null ? (
+                          <div className={cn("text-xs tabular-nums", r.profit_loss >= 0 ? "text-emerald-600" : "text-red-600")}>
+                            {baht(r.profit_loss)}
+                          </div>
+                        ) : null}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Desktop: full table */}
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

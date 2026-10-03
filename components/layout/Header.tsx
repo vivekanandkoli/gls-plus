@@ -31,28 +31,35 @@ export function Header({
       )}
       style={{ borderColor: "var(--border)" }}
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 md:py-3.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <span
-            className="h-6 w-0.5 shrink-0 rounded-full hidden sm:block"
-            style={{ background: "var(--gold-gradient)" }}
-            aria-hidden="true"
-          />
-          <h1
-            className="text-lg md:text-xl font-semibold tracking-wide truncate"
-            style={{ fontFamily: "var(--font-heading)" }}
-          >
-            {title}
-          </h1>
+      {/* Title row — on mobile the account button sits on the right of this row. */}
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-3 md:py-3.5">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className="h-6 w-0.5 shrink-0 rounded-full hidden sm:block"
+              style={{ background: "var(--gold-gradient)" }}
+              aria-hidden="true"
+            />
+            <h1
+              className="text-lg md:text-xl font-semibold tracking-wide truncate"
+              style={{ fontFamily: "var(--font-heading)" }}
+            >
+              {title}
+            </h1>
+          </div>
+          {description ? (
+            <p className="pl-0 text-sm text-muted-foreground sm:pl-[calc(0.75rem+2px)] md:max-w-2xl leading-snug">
+              {description}
+            </p>
+          ) : null}
         </div>
-        {description ? (
-          <p className="pl-0 text-sm text-muted-foreground sm:pl-[calc(0.75rem+2px)] md:max-w-2xl leading-snug">
-            {description}
-          </p>
-        ) : null}
+        {/* Mobile-only account menu, aligned right of the title. */}
+        <div className="shrink-0 md:hidden">
+          <UserMenu />
+        </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 pt-2 md:pt-0">
+      <div className="hidden md:flex shrink-0 items-center gap-2 pt-2 md:pt-0">
         <span
           className="hidden sm:inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-widest whitespace-nowrap"
           style={{

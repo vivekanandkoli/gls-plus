@@ -285,7 +285,57 @@ export default function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
+              {/* Mobile: tap-friendly card list */}
+              <div className="md:hidden">
+                {(data?.recent ?? []).length === 0 ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    No transactions found.{" "}
+                    <button onClick={() => setCreating(true)} className="text-primary hover:underline">
+                      Add the first one
+                    </button>
+                    .
+                  </div>
+                ) : (
+                  <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                    {(data?.recent ?? []).map((t) => (
+                      <li key={t.id}>
+                        <button
+                          onClick={() => setEditId(t.id)}
+                          className="flex w-full items-center justify-between gap-3 py-3 text-left active:bg-muted/50"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={cn("text-sm font-semibold", t.type === "BUY" ? "text-emerald-600" : "text-amber-700")}>
+                                {t.type}
+                              </span>
+                              <span className="truncate text-sm font-medium text-foreground">{t.client_name || "—"}</span>
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{formatDate(t.date, "dd MMM yyyy")}</span>
+                              <span aria-hidden>·</span>
+                              <Badge variant={t.book === "unofficial" ? "secondary" : "outline"} className="h-4 px-1.5 text-[10px]">
+                                {t.book}
+                              </Badge>
+                            </div>
+                            {t.invoice_number ? (
+                              <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">{t.invoice_number}</div>
+                            ) : null}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <div className="text-sm font-semibold tabular-nums">{baht(t.amount_thb)}</div>
+                            <div className="text-xs tabular-nums text-muted-foreground">
+                              {grams(t.weight_grams)} · {rate(t.rate_per_gram)}
+                            </div>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Desktop: full table */}
+              <div className="hidden md:block overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
