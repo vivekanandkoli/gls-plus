@@ -1,14 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "next/navigation";
 import { useReactToPrint } from "react-to-print";
+import { Download, Printer } from "lucide-react";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Button } from "@/components/ui/button";
 import { getSupabaseClient } from "@/lib/supabase";
-import { cn, embedFkOne, formatCurrency, thaiBahtText } from "@/lib/utils";
+import { embedFkOne } from "@/lib/utils";
+import {
+  InvoiceDocument,
+  InvoicePrintSet,
+  type Settings,
+  type TxDetail,
+} from "@/components/PrintInvoice";
 
-type Tx = {
+type ClientRel = { name: string; address: string | null; tax_id: string | null };
+
+type TxRow = {
   id: string;
   date: string;
   type: "BUY" | "SELL";
@@ -18,22 +28,29 @@ type Tx = {
   amount_thb: number | null;
   vat_percent: number | null;
   notes: string | null;
-  client: {
-    name: string;
-    address?: string | null;
-    tax_id?: string | null;
-  } | {
-    name: string;
-    address?: string | null;
-    tax_id?: string | null;
-  }[] | null;
+  client: ClientRel | ClientRel[] | null;
 };
 
-export default function InvoicePage({ params }: { params: { id: string } }) {
+const DEFAULT_SETTINGS: Settings = {
+  company_name_en: "GLS PLUS CO., LTD.",
+  company_name_th: "บริษัท จีแอลเอส พลัส จำกัด",
+  address_en: "66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31 KWAENG DOKMAI, KHET PRAWET BANGKOK 10250",
+  address_th: "66/22 ซ. 31 เจมโมโปลิส เขตประเวศ กรุงเทพฯ 10250",
+  phone: "087-039-8795",
+  email: "glsplusdb@gmail.com",
+  tax_id: "0105563120430",
+  invoice_footer_note: null,
+  logo_data_url: null,
+};
+
+export default function InvoicePage() {
+  const { id } = useParams<{ id: string }>();
   const printRef = useRef<HTMLDivElement>(null);
 
-  const [tx, setTx] = useState<Tx | null>(null);
+  const [tx, setTx] = useState<TxDetail | null>(null);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const canQuery = useMemo(() => {
     try {
@@ -51,283 +68,104 @@ export default function InvoicePage({ params }: { params: { id: string } }) {
     }
     const run = async () => {
       setLoading(true);
+      setError(null);
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const supabase = getSupabaseClient() as any;
-        const { data, error } = await supabase
+
+        const { data, error: txErr } = await supabase
           .from("transactions")
           .select(
             "id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,client:clients(name,address,tax_id)"
           )
-          .eq("id", params.id)
+          .eq("id", id)
           .single();
-        if (error) throw error;
-        setTx(data as unknown as Tx);
+        if (txErr) throw txErr;
+
+        const row = data as TxRow;
+        const client = embedFkOne(row.client);
+        setTx({
+          id: row.id,
+          date: row.date,
+          type: row.type,
+          invoice_number: row.invoice_number,
+          weight_grams: row.weight_grams,
+          rate_per_gram: row.rate_per_gram,
+          amount_thb: row.amount_thb,
+          vat_percent: row.vat_percent,
+          notes: row.notes,
+          clientName: client?.name ?? "-",
+          clientAddress: client?.address ?? null,
+          clientTaxId: client?.tax_id ?? null,
+        });
+
+        // Company settings (real column names → invoice Settings shape).
+        const { data: s } = await supabase
+          .from("settings")
+          .select("company_name,company_name_th,address_1,address_2,phone,email,tax_id,invoice_footer,logo_url")
+          .limit(1)
+          .maybeSingle();
+        if (s) {
+          const addressEn = [s.address_1, s.address_2].filter(Boolean).join(", ");
+          setSettings((prev) => ({
+            company_name_en: s.company_name || prev.company_name_en,
+            company_name_th: s.company_name_th || prev.company_name_th,
+            address_en: addressEn || prev.address_en,
+            address_th: prev.address_th,
+            phone: s.phone || prev.phone,
+            email: s.email || prev.email,
+            tax_id: s.tax_id || prev.tax_id,
+            invoice_footer_note: s.invoice_footer || prev.invoice_footer_note,
+            logo_data_url: s.logo_url || prev.logo_data_url,
+          }));
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load invoice");
       } finally {
         setLoading(false);
       }
     };
     void run();
-  }, [canQuery, params.id]);
+  }, [canQuery, id]);
 
   const onPrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: tx?.invoice_number ?? `invoice-${params.id}`,
+    documentTitle: tx?.invoice_number ?? `invoice-${id}`,
   });
 
-  const onDownloadPdf = () => {
-    // Uses browser's “Save as PDF” in the print dialog.
-    onPrint();
-  };
-
-  const customer = embedFkOne(tx?.client);
-  const invoiceNo = tx?.invoice_number ?? "-";
-  const invoiceDate = tx?.date ?? "-";
-  const weight = tx?.weight_grams ?? 0;
-  const rate = tx?.rate_per_gram ?? 0;
-  const subTotal = tx?.amount_thb ?? weight * rate;
-  const vatPercent = tx?.vat_percent ?? 0;
-  const vatAmount = subTotal * (vatPercent / 100);
-  const total = subTotal + vatAmount;
-
   return (
-    <PageWrapper title={`Invoice ${params.id}`}>
+    <PageWrapper title={tx?.invoice_number ? `Invoice ${tx.invoice_number}` : "Invoice"}>
       <div className="no-print mb-4 flex items-center justify-end gap-2">
-        <Button variant="outline" onClick={onDownloadPdf} disabled={!tx}>
-          Download PDF
+        <Button variant="outline" onClick={() => onPrint()} disabled={!tx}>
+          <Download className="mr-1.5 h-3.5 w-3.5" />
+          Save PDF
         </Button>
-        <Button onClick={onPrint} disabled={!tx}>
-          Print Invoice
+        <Button onClick={() => onPrint()} disabled={!tx}>
+          <Printer className="mr-1.5 h-3.5 w-3.5" />
+          Print
         </Button>
       </div>
 
-      <div
-        ref={printRef}
-        className="print-page mx-auto w-full max-w-[210mm] rounded-lg border bg-white p-6 text-black"
-      >
-        {/* Header (match scanned layout) */}
-        <div className="relative">
-          <div className="absolute right-0 top-0 border-2 border-black px-3 py-1 text-xs font-bold">
-            ORIGINAL
+      {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+      {loading && !tx ? (
+        <p className="text-sm text-muted-foreground">Loading invoice…</p>
+      ) : null}
+
+      {tx ? (
+        <>
+          {/* On-screen preview (single document). */}
+          <div className="mx-auto overflow-hidden rounded-lg border bg-white shadow-sm" style={{ maxWidth: "800px" }}>
+            <InvoiceDocument tx={tx} settings={settings} copyLabel="ORIGINAL" />
           </div>
 
-          <div className="flex items-start gap-3">
-            <div className="h-14 w-14 border-2 border-black grid place-items-center font-black text-base leading-none">
-              GLS
-              <div className="text-[9px] font-semibold -mt-1">PLUS</div>
-            </div>
-            <div className="flex-1">
-              <div className="text-[13px] font-bold leading-tight">
-                GLS PLUS CO., LTD.
-              </div>
-              <div className="text-[10px] leading-snug">
-                66/22 GEMOPOLIS INDUSTRIAL ESTATE SOI 31 KWAENG DOKMAI, KHET
-                PRAWET BANGKOK 10250.
-              </div>
-              <div className="text-[10px] leading-snug">
-                EMAIL: glsplusdb@gmail.com &nbsp;&nbsp; phone no 0870398795
-              </div>
-              <div className="text-[10px] leading-snug">
-                Tax ID: 0105563120430 &nbsp;&nbsp; Head office
-              </div>
+          {/* Hidden node used for printing: ORIGINAL + COPY. */}
+          <div style={{ position: "absolute", left: "-9999px", top: 0 }}>
+            <div ref={printRef}>
+              <InvoicePrintSet tx={tx} settings={settings} />
             </div>
           </div>
-
-          <div className="mt-2 text-center text-[12px] font-bold">
-            ใบเสร็จรับเงิน / RECEIPT / TAX INVOICE
-          </div>
-        </div>
-
-        {/* Customer + invoice meta */}
-        <div className="mt-2 grid gap-3 md:grid-cols-2">
-          <div className="text-[11px] leading-snug">
-            <div className="font-semibold">Customer:</div>
-            <div className="font-medium">
-              {customer?.name ?? (loading ? "Loading..." : "-")}
-            </div>
-            <div className="text-[10px]">{customer?.address ?? ""}</div>
-            <div className="text-[10px]">
-              Tax ID: <span className="font-mono">{customer?.tax_id ?? "-"}</span>
-            </div>
-          </div>
-          <div className="text-[11px] leading-snug md:text-right">
-            <div>
-              <span className="font-semibold">Invoice Number</span>{" "}
-              <span className="font-mono font-semibold">{invoiceNo}</span>
-            </div>
-            <div>
-              <span className="font-semibold">Date</span>{" "}
-              <span className="font-medium">{invoiceDate}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Line items */}
-        <div className="pt-3">
-          <div className="text-[11px] font-semibold mb-1">Items</div>
-          <div className="text-[10px] mb-1">in / Baht:</div>
-          <table className="w-full border-collapse text-[10px]">
-            <thead>
-              <tr className="border border-black">
-                <th className="border border-black p-2 text-center w-[28px]">
-                  #
-                </th>
-                <th className="border border-black p-2 text-center w-[80px]">
-                  Code
-                </th>
-                <th className="border border-black p-2 text-left">
-                  Perticulars
-                </th>
-                <th className="border border-black p-2 text-right w-[110px]">
-                  Unit/Price
-                </th>
-                <th className="border border-black p-2 text-right w-[95px]">
-                  Weight(g)
-                </th>
-                <th className="border border-black p-2 text-right w-[120px]">
-                  Amount
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border border-black">
-                <td className="border border-black p-2 text-center">1</td>
-                <td className="border border-black p-2 text-center">G9999</td>
-                <td className="border border-black p-2">
-                  Pure gold (99.99%)
-                  {tx?.notes ? (
-                    <div className="mt-1 text-[10px] text-black/70">
-                      {tx.notes}
-                    </div>
-                  ) : null}
-                </td>
-                <td className="border border-black p-2 text-right">
-                  {rate ? rate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}
-                </td>
-                <td className="border border-black p-2 text-right">
-                  {weight
-                    ? weight.toLocaleString(undefined, {
-                        minimumFractionDigits: 4,
-                        maximumFractionDigits: 4,
-                      })
-                    : "-"}
-                </td>
-                <td className="border border-black p-2 text-right">
-                  {subTotal.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </td>
-              </tr>
-              {/* filler row for visual spacing */}
-              <tr className="border border-black">
-                <td className="border border-black p-6" colSpan={6} />
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* Totals */}
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div className="text-[10px] leading-snug">
-            <div className="font-semibold">Amount in words</div>
-            <div className="mt-1 border border-black p-2">
-              {thaiBahtText(total)}
-            </div>
-
-            <div className="mt-2 grid grid-cols-2 gap-x-2 text-[10px]">
-              <div className="font-semibold">Amount =</div>
-              <div className="text-right">
-                {Math.round(total).toLocaleString()} Baht
-              </div>
-            </div>
-          </div>
-
-          <div className="ml-auto w-full max-w-sm text-[10px]">
-            <div className="grid grid-cols-2 border border-black">
-              <div className="border-r border-black p-2 font-semibold">
-                Sub Total
-              </div>
-              <div className="p-2 text-right">
-                {subTotal.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </div>
-
-              <div className="border-t border-r border-black p-2 font-semibold">
-                Vat {vatPercent}%
-              </div>
-              <div className="border-t border-black p-2 text-right">
-                {vatAmount.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </div>
-
-              <div className="border-t border-r border-black p-2 font-semibold">
-                Total
-              </div>
-              <div className="border-t border-black p-2 text-right font-semibold">
-                {total.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-4 text-[10px]">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <div className="font-semibold">Paid by</div>
-              <div className="flex items-center gap-6">
-                {["Cash", "Cheque", "Transfer"].map((m) => (
-                  <div key={m} className="flex items-center gap-2">
-                    <span className="inline-block h-3 w-3 border border-black" />
-                    <span>{m}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-2">
-                Received goods in good order and condition
-              </div>
-
-              <div className="mt-2 space-y-1">
-                <div>Bank ................... Branch ...................</div>
-                <div>
-                  No ............................. Date ........../........../........
-                </div>
-                <div>Goods received by .............................................</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 gap-3 text-center">
-              {["Authorised signature", "Collector", "Date", "Delivery by"].map(
-                (label) => (
-                  <div key={label}>
-                    <div className="h-10 border-b border-black" />
-                    <div className="mt-1">{label}</div>
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-
-          <div className="mt-2 text-[9px] leading-snug text-black/70">
-            Note: This receipt will be valid only with authorised signature and
-            bill collector&apos;s signature. If payment is made by cheque, this
-            receipt is invalid until cheque is cleared.
-          </div>
-
-          <div className={cn("mt-2 text-[10px] text-black/60", loading && "italic")}>
-            {loading ? "Loading invoice data..." : ""}
-          </div>
-        </div>
-      </div>
+        </>
+      ) : null}
     </PageWrapper>
   );
 }
-

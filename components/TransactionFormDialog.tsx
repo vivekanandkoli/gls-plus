@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { FileText } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +17,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAppUser } from "@/hooks/use-app-user";
 import { cn } from "@/lib/utils";
 
-type Client = { id: string; name: string };
+type Client = {
+  id: string;
+  name: string;
+  tax_id?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+};
 
 type Tx = {
   id: string;
@@ -152,6 +161,15 @@ export function TransactionFormDialog({
   }, [id]);
 
   const isUnofficial = form.book === "unofficial";
+
+  // Details of the currently selected client, to show inline on the form.
+  const selectedClient = useMemo(
+    () => clients.find((c) => c.id === form.clientId) ?? null,
+    [clients, form.clientId]
+  );
+  const hasClientDetails =
+    !!selectedClient &&
+    !!(selectedClient.tax_id || selectedClient.address || selectedClient.phone || selectedClient.email);
 
   // keep amount in sync when weight/rate change
   const autoAmount = useMemo(() => {
@@ -312,6 +330,37 @@ export function TransactionFormDialog({
               ) : null}
             </div>
 
+            {selectedClient ? (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                <div className="mb-1 font-medium text-muted-foreground">
+                  Client details{!hasClientDetails ? " — none on file yet" : ""}
+                </div>
+                <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                  <div>
+                    <span className="text-muted-foreground">Tax ID: </span>
+                    <span className="font-mono">{selectedClient.tax_id || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Phone: </span>
+                    <span>{selectedClient.phone || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Email: </span>
+                    <span>{selectedClient.email || "—"}</span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-muted-foreground">Address: </span>
+                    <span>{selectedClient.address || "—"}</span>
+                  </div>
+                </div>
+                {!hasClientDetails ? (
+                  <p className="mt-1.5 text-muted-foreground">
+                    Add these on the client&apos;s page (Clients → open → Edit Client); they appear on the invoice.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <Field label="Notes">
               <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2} />
             </Field>
@@ -348,6 +397,14 @@ export function TransactionFormDialog({
             </Button>
           )}
           <div className="flex gap-2">
+            {!isCreate && tx?.invoice_number ? (
+              <Button variant="outline" asChild>
+                <Link href={`/invoice/${id}`} target="_blank" rel="noopener noreferrer">
+                  <FileText className="mr-1.5 h-3.5 w-3.5" />
+                  View Invoice
+                </Link>
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={onClose} disabled={saving}>
               Cancel
             </Button>

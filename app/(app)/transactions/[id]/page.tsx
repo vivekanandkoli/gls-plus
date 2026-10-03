@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTransactionWac } from "@/hooks/use-transaction-wac";
 import { getSupabaseClient } from "@/lib/supabase";
-import { cn, embeddedClientName, formatCurrency } from "@/lib/utils";
+import { cn, embedFkOne, embeddedClientName, formatCurrency } from "@/lib/utils";
+import { FileText } from "lucide-react";
 import { TransactionStatusBadge } from "@/components/transactions/TransactionStatusBadge";
 import { useAppUser } from "@/hooks/use-app-user";
 import { canEditTransaction } from "@/lib/transaction-permissions";
@@ -34,7 +35,15 @@ type TxDetail = {
   status?: TransactionStatus;
   created_by?: number | null;
   rejection_reason?: string | null;
-  client: { name: string } | { name: string }[] | null;
+  client: ClientRel | ClientRel[] | null;
+};
+
+type ClientRel = {
+  name: string;
+  address?: string | null;
+  tax_id?: string | null;
+  phone?: string | null;
+  email?: string | null;
 };
 
 export default function TransactionDetailPage() {
@@ -77,7 +86,7 @@ export default function TransactionDetailPage() {
         const { data, error } = await supabase
           .from("transactions")
           .select(
-            `id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,status,created_by,rejection_reason${wacSelect},client:clients(name)`
+            `id,date,type,invoice_number,weight_grams,rate_per_gram,amount_thb,vat_percent,notes,status,created_by,rejection_reason${wacSelect},client:clients(name,address,tax_id,phone,email)`
           )
           .eq("id", id)
           .single();
@@ -138,6 +147,7 @@ export default function TransactionDetailPage() {
   }
 
   const clientName = embeddedClientName(tx.client) ?? "-";
+  const client = embedFkOne(tx.client);
   const pl = useDbWac ? wacPlFromRow(tx) : plById.get(tx.id);
   const txRecord = {
     ...tx,
@@ -212,11 +222,21 @@ export default function TransactionDetailPage() {
             </div>
           </div>
 
-          {showEdit && (
-            <Button asChild size="sm">
-              <Link href={`/transactions/${tx.id}/edit`}>Edit</Link>
-            </Button>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {tx.invoice_number && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/invoice/${tx.id}`} target="_blank" rel="noopener noreferrer">
+                  <FileText className="mr-1.5 h-3.5 w-3.5" />
+                  View Invoice
+                </Link>
+              </Button>
+            )}
+            {showEdit && (
+              <Button asChild size="sm">
+                <Link href={`/transactions/${tx.id}/edit`}>Edit</Link>
+              </Button>
+            )}
+          </div>
         </div>
 
         {tx.status === "rejected" && tx.rejection_reason && (
@@ -229,6 +249,10 @@ export default function TransactionDetailPage() {
         <div className="rounded-lg border divide-y text-sm">
           {[
             ["Client", clientName],
+            ["Tax ID", client?.tax_id || "-"],
+            ["Address", client?.address || "-"],
+            ["Phone", client?.phone || "-"],
+            ["Email", client?.email || "-"],
             ["Weight", tx.weight_grams != null ? `${tx.weight_grams.toLocaleString()} g` : "-"],
             ["Rate", tx.rate_per_gram != null ? `${tx.rate_per_gram.toLocaleString()} THB/g` : "-"],
             ["Amount", tx.amount_thb != null ? formatCurrency(tx.amount_thb, "THB", "th-TH") : "-"],
