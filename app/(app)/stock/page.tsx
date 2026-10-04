@@ -39,7 +39,6 @@ export default function StockPage() {
   const [loading, setLoading] = useState(true);
 
   const [book, setBook] = useState<"unofficial" | "official">("unofficial");
-  const [mode, setMode] = useState<"set" | "delta">("set");
   const [grams, setGrams] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState("");
@@ -80,7 +79,7 @@ export default function StockPage() {
       const res = await fetch("/api/stock/adjust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ book, mode, grams: Number(grams), date, reason }),
+        body: JSON.stringify({ book, mode: "set", grams: Number(grams), date, reason }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Failed to save");
@@ -156,22 +155,29 @@ export default function StockPage() {
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">Mode</span>
-              <select className={selectCls} value={mode} onChange={(e) => setMode(e.target.value as "set" | "delta")}>
-                <option value="set">Set stock to…</option>
-                <option value="delta">Adjust by (+/−)…</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">
-                {mode === "set" ? "New stock (grams)" : "Change (grams, use − to reduce)"}
-              </span>
-              <Input type="number" step="0.001" value={grams} onChange={(e) => setGrams(e.target.value)} required />
+              <span className="text-xs font-medium text-muted-foreground">Current quantity in vault (grams)</span>
+              <Input type="number" step="0.001" value={grams} onChange={(e) => setGrams(e.target.value)} required placeholder="Actual counted grams" />
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground">Date</span>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
             </label>
+            {(() => {
+              const curr = (book === "unofficial" ? unofficial?.currentStockGm : official?.currentStockGm) ?? 0;
+              const entered = grams === "" ? null : Number(grams);
+              if (entered == null || !Number.isFinite(entered)) return null;
+              const delta = Math.round((entered - curr) * 1000) / 1000;
+              return (
+                <div className="sm:col-span-2 rounded-md border bg-muted/40 px-3 py-2 text-sm" style={{ borderColor: "var(--border)" }}>
+                  Recorded now: <strong>{gm(curr)}</strong> → entering <strong>{gm(entered)}</strong>{" "}
+                  = change of{" "}
+                  <strong className={delta > 0 ? "text-emerald-700" : delta < 0 ? "text-red-700" : ""}>
+                    {delta > 0 ? "+" : ""}{gm(delta)}
+                  </strong>
+                  {delta === 0 ? " (no change)" : ""}
+                </div>
+              );
+            })()}
             <label className="flex flex-col gap-1 sm:col-span-2">
               <span className="text-xs font-medium text-muted-foreground">Reason</span>
               <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} required placeholder="e.g. Physical count correction, added vault stock…" />
