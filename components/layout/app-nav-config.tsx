@@ -13,6 +13,7 @@ import {
   Settings2,
   UserPlus,
   Users,
+  Wallet,
 } from "lucide-react";
 
 export type AppNavItem = {
@@ -59,6 +60,12 @@ export const PRIMARY_NAV: AppNavItem[] = [
     label: "Reports",
     icon: BarChart3,
     keywords: ["analytics", "charts"],
+  },
+  {
+    href: "/expenses",
+    label: "Expense Tracker",
+    icon: Wallet,
+    keywords: ["expense", "cash", "balance", "ledger", "received", "spending"],
   },
   {
     href: "/settings",
