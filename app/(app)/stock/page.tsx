@@ -38,7 +38,6 @@ export default function StockPage() {
   const [unofficial, setUnofficial] = useState<BookData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [book, setBook] = useState<"unofficial" | "official">("unofficial");
   const [grams, setGrams] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [reason, setReason] = useState("");
@@ -68,7 +67,8 @@ export default function StockPage() {
     if (isAdmin) void load();
   }, [isAdmin, load]);
 
-  const actual = (official?.currentStockGm ?? 0) + (unofficial?.currentStockGm ?? 0);
+  const officialStock = official?.currentStockGm ?? 0;
+  const actual = officialStock + (unofficial?.currentStockGm ?? 0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -76,14 +76,17 @@ export default function StockPage() {
     setErr(null);
     setMsg(null);
     try {
+      // The owner enters the ACTUAL total; the undeclared portion we store is
+      // actual − official, so Actual = official + unofficial lands on the input.
+      const target = Math.round((Number(grams) - officialStock) * 1000) / 1000;
       const res = await fetch("/api/stock/adjust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ book, mode: "set", grams: Number(grams), date, reason }),
+        body: JSON.stringify({ book: "unofficial", mode: "set", grams: target, date, reason }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Failed to save");
-      setMsg(`Saved. ${book === "unofficial" ? "Real vault" : "Official"} stock is now ${gm(d.currentStockGm)}.`);
+      setMsg(`Saved. Actual stock is now ${gm(Number(grams))}.`);
       setGrams("");
       setReason("");
       await load();
@@ -113,28 +116,16 @@ export default function StockPage() {
     ...(official?.adjustments ?? []),
   ].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
 
-  const selectCls =
-    "w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
-
   return (
     <PageWrapper
       title="Real stock"
       description="Adjust the real vault (unofficial) stock. Actual = official + unofficial; official is unchanged."
     >
       {/* Totals */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-sm">Official (declared)</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold tabular-nums">{loading ? "…" : gm(official?.currentStockGm)}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1"><CardTitle className="text-sm">Unofficial (real vault)</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{loading ? "…" : gm(unofficial?.currentStockGm)}</div>
-            {unofficial?.adjustmentGm ? (
-              <div className="text-xs text-muted-foreground">incl. {gm(unofficial.adjustmentGm)} adjustments</div>
-            ) : null}
-          </CardContent>
+          <CardContent><div className="text-2xl font-bold tabular-nums">{loading ? "…" : gm(officialStock)}</div></CardContent>
         </Card>
         <Card className="border-primary/40">
           <CardHeader className="pb-1"><CardTitle className="text-sm">Actual (official + unofficial)</CardTitle></CardHeader>
@@ -148,14 +139,7 @@ export default function StockPage() {
         <CardContent>
           <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">Book</span>
-              <select className={selectCls} value={book} onChange={(e) => setBook(e.target.value as "unofficial" | "official")}>
-                <option value="unofficial">Unofficial (real vault)</option>
-                <option value="official">Official (declared)</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">Current quantity in vault (grams)</span>
+              <span className="text-xs font-medium text-muted-foreground">Actual total stock in vault (grams)</span>
               <Input type="number" step="0.001" value={grams} onChange={(e) => setGrams(e.target.value)} required placeholder="Actual counted grams" />
             </label>
             <label className="flex flex-col gap-1">
@@ -163,18 +147,17 @@ export default function StockPage() {
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
             </label>
             {(() => {
-              const curr = (book === "unofficial" ? unofficial?.currentStockGm : official?.currentStockGm) ?? 0;
               const entered = grams === "" ? null : Number(grams);
               if (entered == null || !Number.isFinite(entered)) return null;
-              const delta = Math.round((entered - curr) * 1000) / 1000;
+              const undeclared = Math.round((entered - officialStock) * 1000) / 1000;
               return (
                 <div className="sm:col-span-2 rounded-md border bg-muted/40 px-3 py-2 text-sm" style={{ borderColor: "var(--border)" }}>
-                  Recorded now: <strong>{gm(curr)}</strong> → entering <strong>{gm(entered)}</strong>{" "}
-                  = change of{" "}
-                  <strong className={delta > 0 ? "text-emerald-700" : delta < 0 ? "text-red-700" : ""}>
-                    {delta > 0 ? "+" : ""}{gm(delta)}
+                  Official (declared): <strong>{gm(officialStock)}</strong> · setting Actual to{" "}
+                  <strong>{gm(entered)}</strong> → undeclared portion recorded ={" "}
+                  <strong className={undeclared >= 0 ? "text-emerald-700" : "text-red-700"}>
+                    {undeclared >= 0 ? "+" : ""}{gm(undeclared)}
                   </strong>
-                  {delta === 0 ? " (no change)" : ""}
+                  {undeclared < 0 ? " (actual is below declared)" : ""}
                 </div>
               );
             })()}
@@ -202,13 +185,11 @@ export default function StockPage() {
               {history.map((a) => (
                 <li key={`${a.book}-${a.id}`} className="flex items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="text-sm">
                       <span className={cn("font-semibold tabular-nums", a.delta_gm >= 0 ? "text-emerald-700" : "text-red-700")}>
                         {a.delta_gm >= 0 ? "+" : ""}{gm(a.delta_gm)}
                       </span>
-                      <span className="rounded-full border px-1.5 text-[10px] uppercase text-muted-foreground" style={{ borderColor: "var(--border)" }}>
-                        {a.book}
-                      </span>
+                      <span className="ml-1 text-xs text-muted-foreground">to the real vault</span>
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">{a.date} · {a.reason}</div>
                   </div>

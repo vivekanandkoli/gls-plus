@@ -259,11 +259,10 @@ export default function DashboardPage() {
                 <CardTitle className="text-sm">Reconciliation - real vs declared</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <Stat label="Official (declared)" value={grams(off.physicalStockGm)} tone={off.physicalStockGm < 0 ? "neg" : undefined} />
-                  <Stat label="Unofficial (real vault)" value={grams(unoff.physicalStockGm)} tone={unoff.physicalStockGm < 0 ? "neg" : undefined} />
                   <Stat label="Actual stock (official + unofficial)" value={grams(off.physicalStockGm + unoff.physicalStockGm)} tone="pos" />
-                  <Stat label="Actual P/L (unofficial)" value={baht(unoff.profit)} tone={unoff.profit >= 0 ? "pos" : "neg"} />
+                  <Stat label="Actual P/L" value={baht(unoff.profit)} tone={unoff.profit >= 0 ? "pos" : "neg"} />
                 </div>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
