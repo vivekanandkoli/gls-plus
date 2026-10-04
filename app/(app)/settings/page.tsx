@@ -733,6 +733,9 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button variant="outline" asChild>
+              <a href="/stock">Adjust real stock →</a>
+            </Button>
+            <Button variant="outline" asChild>
               <a href="/settings/users">Manage users →</a>
             </Button>
             <Button variant="outline" asChild>

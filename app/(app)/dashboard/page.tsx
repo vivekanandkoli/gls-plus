@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { TransactionFormDialog } from "@/components/TransactionFormDialog";
+import { useAppUser } from "@/hooks/use-app-user";
 
 type BookSummary = {
   book: "official" | "unofficial";
@@ -145,6 +146,7 @@ function BookCard({
 }
 
 export default function DashboardPage() {
+  const { isAdmin } = useAppUser();
   const [year, setYear] = useState<number | null>(null);
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -258,14 +260,21 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <Stat label="Real stock (unofficial)" value={grams(unoff.stockGm)} tone={unoff.stockGm < 0 ? "neg" : undefined} />
-                  <Stat label="Declared stock (official)" value={grams(off.stockGm)} tone={off.stockGm < 0 ? "neg" : undefined} />
-                  <Stat label="Stock variance" value={grams(unoff.stockGm - off.stockGm)} />
+                  <Stat label="Official (declared)" value={grams(off.physicalStockGm)} tone={off.physicalStockGm < 0 ? "neg" : undefined} />
+                  <Stat label="Unofficial (real vault)" value={grams(unoff.physicalStockGm)} tone={unoff.physicalStockGm < 0 ? "neg" : undefined} />
+                  <Stat label="Actual stock (official + unofficial)" value={grams(off.physicalStockGm + unoff.physicalStockGm)} tone="pos" />
                   <Stat label="Actual P/L (unofficial)" value={baht(unoff.profit)} tone={unoff.profit >= 0 ? "pos" : "neg"} />
                 </div>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  The two books are never summed. Actual profit = unofficial alone; official is the tax view.
-                </p>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Actual physical stock = official + unofficial. Official stays as declared; the real vault is the undeclared balance.
+                  </p>
+                  {isAdmin ? (
+                    <Link href="/stock" className="text-xs font-medium text-primary hover:underline">
+                      Adjust real stock →
+                    </Link>
+                  ) : null}
+                </div>
               </CardContent>
             </Card>
           ) : null}
