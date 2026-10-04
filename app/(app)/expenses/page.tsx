@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Download, Plus, Search } from "lucide-react";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,20 @@ type TypeFilter = "all" | "received" | "expense";
 const fmt = (n: number | string | null | undefined) =>
   Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Currency symbol for the tracker. Change to "฿" if these amounts are Thai baht.
+const CURRENCY = "₹";
+const money = (n: number | string | null | undefined) => `${CURRENCY}${fmt(n)}`;
+
+function monthRange(ym: string): { first: string; last: string } {
+  const [y, m] = ym.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return { first: `${ym}-01`, last: `${ym}-${String(lastDay).padStart(2, "0")}` };
+}
+const CURRENT_MONTH = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+})();
+
 function useDebounce<T>(value: T, delay: number): T {
   const [dv, setDv] = useState(value);
   useEffect(() => {
@@ -69,9 +83,10 @@ export default function ExpensesPage() {
   const [q, setQ] = useState("");
   const debouncedQ = useDebounce(q, 300);
   const [type, setType] = useState<TypeFilter>("all");
-  const [month, setMonth] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  // Default to the current month so the owner lands on recent activity.
+  const [month, setMonth] = useState(CURRENT_MONTH);
+  const [from, setFrom] = useState(monthRange(CURRENT_MONTH).first);
+  const [to, setTo] = useState(monthRange(CURRENT_MONTH).last);
 
   const [addOpen, setAddOpen] = useState(false);
   const [formState, setFormState] = useState(blank());
@@ -119,6 +134,14 @@ export default function ExpensesPage() {
   }
   function clearFilters() {
     setQ(""); setType("all"); setMonth(""); setFrom(""); setTo("");
+  }
+  function exportCsv() {
+    const p = new URLSearchParams();
+    if (debouncedQ.trim()) p.set("q", debouncedQ.trim());
+    if (type !== "all") p.set("type", type);
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    window.location.href = `/api/expenses/export?${p.toString()}`;
   }
 
   async function addEntry(e: React.FormEvent) {
@@ -196,19 +219,19 @@ export default function ExpensesPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card className="border-primary/40">
           <CardHeader className="pb-1"><CardTitle className="text-xs">Current balance</CardTitle></CardHeader>
-          <CardContent><div className={cn("text-xl font-bold tabular-nums", overallBalance < 0 ? "text-red-600" : "text-emerald-700")}>{fmt(overallBalance)}</div></CardContent>
+          <CardContent><div className={cn("text-xl font-bold tabular-nums", overallBalance < 0 ? "text-red-600" : "text-emerald-700")}>{money(overallBalance)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs">Received{hasFilter ? " (filtered)" : ""}</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold tabular-nums text-emerald-700">{fmt(view.received)}</div></CardContent>
+          <CardContent><div className="text-xl font-bold tabular-nums text-emerald-700">{money(view.received)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs">Expense{hasFilter ? " (filtered)" : ""}</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold tabular-nums text-red-600">{fmt(view.expense)}</div></CardContent>
+          <CardContent><div className="text-xl font-bold tabular-nums text-red-600">{money(view.expense)}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs">Net{hasFilter ? " (filtered)" : ""}</CardTitle></CardHeader>
-          <CardContent><div className={cn("text-xl font-bold tabular-nums", net < 0 ? "text-red-600" : "text-emerald-700")}>{fmt(net)}</div></CardContent>
+          <CardContent><div className={cn("text-xl font-bold tabular-nums", net < 0 ? "text-red-600" : "text-emerald-700")}>{money(net)}</div></CardContent>
         </Card>
       </div>
 
@@ -238,6 +261,9 @@ export default function ExpensesPage() {
         {(q || type !== "all" || from || to) ? (
           <Button variant="outline" onClick={clearFilters}>Clear</Button>
         ) : null}
+        <Button variant="outline" onClick={exportCsv} disabled={total === 0}>
+          <Download className="mr-1.5 h-4 w-4" /> Export
+        </Button>
         <Button onClick={() => { setFormState(blank()); setErr(null); setAddOpen(true); }}>
           <Plus className="mr-1.5 h-4 w-4" /> Add entry
         </Button>
@@ -264,9 +290,9 @@ export default function ExpensesPage() {
                   <TableCell className="whitespace-nowrap">{r.date}</TableCell>
                   <TableCell className="max-w-[320px] truncate">{r.description || "—"}</TableCell>
                   <TableCell className="font-mono text-xs">{r.job_id || ""}</TableCell>
-                  <TableCell className="text-right tabular-nums text-emerald-700">{Number(r.received) ? fmt(r.received) : ""}</TableCell>
-                  <TableCell className="text-right tabular-nums text-red-600">{Number(r.expense) ? fmt(r.expense) : ""}</TableCell>
-                  <TableCell className={cn("text-right tabular-nums font-medium", Number(r.balance) < 0 ? "text-red-600" : "")}>{fmt(r.balance)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-emerald-700">{Number(r.received) ? money(r.received) : ""}</TableCell>
+                  <TableCell className="text-right tabular-nums text-red-600">{Number(r.expense) ? money(r.expense) : ""}</TableCell>
+                  <TableCell className={cn("text-right tabular-nums font-medium", Number(r.balance) < 0 ? "text-red-600" : "")}>{money(r.balance)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEdit({ ...r, received: Number(r.received), expense: Number(r.expense), balance: Number(r.balance) })}>Edit</Button>
