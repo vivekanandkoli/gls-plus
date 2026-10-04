@@ -204,14 +204,15 @@
    */
   .print-page {
     box-shadow: none !important;
+    border: none !important;
     box-sizing: border-box !important;
-    /* Sized to fit inside the @page margin so the border frame isn't clipped. */
-    width: 194mm !important;
-    height: 279mm !important;
-    max-width: 194mm !important;
-    max-height: 279mm !important;
-    padding: 6mm 8mm !important;
-    margin: 0 auto !important;
+    /* Full A4; the 10mm padding is the even margin on all four sides. */
+    width: 210mm !important;
+    height: 297mm !important;
+    max-width: 210mm !important;
+    max-height: 297mm !important;
+    padding: 10mm !important;
+    margin: 0 !important;
     overflow: hidden !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
@@ -220,6 +221,13 @@
     /* Print the border frame, dark table header and gold accents. */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+  /* The frame fills the padded area, so the border is evenly inset all round. */
+  .invoice-frame {
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
   /* Keep backgrounds/colors (dark header, badges) when printing. */
   .print-page * {
@@ -242,7 +250,7 @@
    */
   @page {
     size: A4;
-    margin: 8mm;
+    margin: 0;
   }
   html,
   body {

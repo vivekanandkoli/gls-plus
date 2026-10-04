@@ -114,12 +114,16 @@ export function InvoiceDocument({
       fontSize: "11px",
       color: "#111",
       background: "#fff",
-      padding: "24px 26px",
-      maxWidth: "780px",
+      maxWidth: "800px",
       margin: "0 auto",
       lineHeight: 1.4,
-      // Formal double frame around the whole document.
+    },
+    // Formal double frame around the document. On print it fills the printable
+    // area (see globals.css) so the margins are even on all four sides.
+    frame: {
       border: "3px double #1c1917",
+      padding: "22px 26px",
+      boxSizing: "border-box" as const,
     },
     headerRow: {
       display: "flex",
@@ -237,6 +241,7 @@ export function InvoiceDocument({
 
   return (
     <div className="print-page" style={s.page}>
+      <div className="invoice-frame" style={s.frame}>
       {/* ── Header ── */}
       <div style={s.headerRow}>
         {/* Left: logo with the GLS PLUS wordmark beneath it. */}
@@ -437,6 +442,7 @@ export function InvoiceDocument({
         {settings.invoice_footer_note && (
           <><br />{settings.invoice_footer_note}</>
         )}
+      </div>
       </div>
     </div>
   );
