@@ -39,8 +39,8 @@ type TypeFilter = "all" | "received" | "expense";
 const fmt = (n: number | string | null | undefined) =>
   Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Currency symbol for the tracker. Change to "฿" if these amounts are Thai baht.
-const CURRENCY = "₹";
+// Currency symbol for the tracker (Thai baht).
+const CURRENCY = "฿";
 const money = (n: number | string | null | undefined) => `${CURRENCY}${fmt(n)}`;
 
 function monthRange(ym: string): { first: string; last: string } {
