@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Button } from "@/components/ui/button";
@@ -17,21 +16,21 @@ type Adj = {
   date: string;
   delta_gm: number;
   reason: string;
+  status: "pending" | "approved" | "rejected";
+  rejection_reason: string | null;
   created_at: string;
 };
 type BookData = {
   book: "official" | "unofficial";
   currentStockGm: number;
-  wacStockGm: number;
-  adjustmentGm: number;
-  adjustments: Adj[];
+  approved: Adj[];
+  pending: Adj[];
 };
 
 const gm = (n: number | null | undefined) =>
   `${(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 3 })} g`;
 
 export default function StockPage() {
-  const router = useRouter();
   const { isAdmin, loading: authLoading } = useAppUser();
 
   const [official, setOfficial] = useState<BookData | null>(null);
@@ -44,10 +43,6 @@ export default function StockPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!authLoading && !isAdmin) router.replace("/dashboard");
-  }, [authLoading, isAdmin, router]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,8 +59,8 @@ export default function StockPage() {
   }, []);
 
   useEffect(() => {
-    if (isAdmin) void load();
-  }, [isAdmin, load]);
+    void load();
+  }, [load]);
 
   const officialStock = official?.currentStockGm ?? 0;
   const actual = officialStock + (unofficial?.currentStockGm ?? 0);
@@ -76,8 +71,6 @@ export default function StockPage() {
     setErr(null);
     setMsg(null);
     try {
-      // The owner enters the ACTUAL total; the undeclared portion we store is
-      // actual − official, so Actual = official + unofficial lands on the input.
       const target = Math.round((Number(grams) - officialStock) * 1000) / 1000;
       const res = await fetch("/api/stock/adjust", {
         method: "POST",
@@ -86,7 +79,11 @@ export default function StockPage() {
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Failed to save");
-      setMsg(`Saved. Actual stock is now ${gm(Number(grams))}.`);
+      setMsg(
+        d.pending
+          ? "Request submitted. An admin will review it before the Actual stock updates."
+          : `Saved. Actual stock is now ${gm(Number(grams))}.`
+      );
       setGrams("");
       setReason("");
       await load();
@@ -97,29 +94,48 @@ export default function StockPage() {
     }
   }
 
-  async function del(id: number) {
-    if (!confirm("Delete this adjustment? Stock will be recalculated.")) return;
+  async function decide(id: number, action: "approve" | "reject") {
+    let rejectionReason: string | undefined;
+    if (action === "reject") {
+      rejectionReason = window.prompt("Reason for rejecting (optional):") ?? "";
+    }
+    const res = await fetch(`/api/stock/adjust/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, rejectionReason }),
+    });
+    if (res.ok) await load();
+  }
+
+  async function cancel(id: number) {
+    if (!confirm("Cancel this request?")) return;
     const res = await fetch(`/api/stock/adjust?id=${id}`, { method: "DELETE" });
     if (res.ok) await load();
   }
 
-  if (authLoading || !isAdmin) {
+  if (authLoading) {
     return (
       <PageWrapper title="Real stock">
-        <p className="text-sm text-muted-foreground">Checking access…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       </PageWrapper>
     );
   }
 
-  const history = [
-    ...(unofficial?.adjustments ?? []),
-    ...(official?.adjustments ?? []),
-  ].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const pending = [...(unofficial?.pending ?? []), ...(official?.pending ?? [])].sort(
+    (a, b) => b.created_at.localeCompare(a.created_at)
+  );
+  const history = [...(unofficial?.approved ?? []), ...(official?.approved ?? [])].sort(
+    (a, b) => b.date.localeCompare(a.date) || b.id - a.id
+  );
 
   return (
     <PageWrapper
       title="Real stock"
-      description="Adjust the real vault (unofficial) stock. Actual = official + unofficial; official is unchanged."
+      description={
+        isAdmin
+          ? "Adjust the real vault stock. Actual = official + unofficial; official is unchanged."
+          : "Request a real-stock update. It goes to an admin for approval before the Actual stock changes."
+      }
     >
       {/* Totals */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -133,9 +149,9 @@ export default function StockPage() {
         </Card>
       </div>
 
-      {/* Adjust form */}
+      {/* Request / adjust form */}
       <Card className="mt-4">
-        <CardHeader><CardTitle className="text-sm">Adjust stock</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm">{isAdmin ? "Adjust stock" : "Request a stock update"}</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
@@ -153,37 +169,36 @@ export default function StockPage() {
               return (
                 <div className="sm:col-span-2 rounded-md border bg-muted/40 px-3 py-2 text-sm" style={{ borderColor: "var(--border)" }}>
                   Official (declared): <strong>{gm(officialStock)}</strong> · setting Actual to{" "}
-                  <strong>{gm(entered)}</strong> → undeclared portion recorded ={" "}
+                  <strong>{gm(entered)}</strong> → undeclared portion ={" "}
                   <strong className={undeclared >= 0 ? "text-emerald-700" : "text-red-700"}>
                     {undeclared >= 0 ? "+" : ""}{gm(undeclared)}
                   </strong>
-                  {undeclared < 0 ? " (actual is below declared)" : ""}
                 </div>
               );
             })()}
             <label className="flex flex-col gap-1 sm:col-span-2">
-              <span className="text-xs font-medium text-muted-foreground">Reason</span>
+              <span className="text-xs font-medium text-muted-foreground">Reason / comment</span>
               <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} required placeholder="e.g. Physical count correction, added vault stock…" />
             </label>
             {err ? <p className="text-sm text-red-600 sm:col-span-2">{err}</p> : null}
             {msg ? <p className="text-sm text-emerald-700 sm:col-span-2">{msg}</p> : null}
             <div className="sm:col-span-2">
-              <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save adjustment"}</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : isAdmin ? "Save adjustment" : "Submit for approval"}
+              </Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      {/* History */}
-      <Card className="mt-4">
-        <CardHeader><CardTitle className="text-sm">Adjustment history</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          {history.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">No adjustments yet.</p>
-          ) : (
+      {/* Pending requests */}
+      {pending.length > 0 ? (
+        <Card className="mt-4 border-amber-300">
+          <CardHeader><CardTitle className="text-sm">{isAdmin ? "Pending approval" : "Your pending requests"}</CardTitle></CardHeader>
+          <CardContent className="p-0">
             <ul className="divide-y px-4" style={{ borderColor: "var(--border)" }}>
-              {history.map((a) => (
-                <li key={`${a.book}-${a.id}`} className="flex items-start justify-between gap-3 py-3">
+              {pending.map((a) => (
+                <li key={a.id} className="flex items-start justify-between gap-3 py-3">
                   <div className="min-w-0">
                     <div className="text-sm">
                       <span className={cn("font-semibold tabular-nums", a.delta_gm >= 0 ? "text-emerald-700" : "text-red-700")}>
@@ -193,9 +208,50 @@ export default function StockPage() {
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">{a.date} · {a.reason}</div>
                   </div>
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-red-600" onClick={() => del(a.id)}>
-                    Delete
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {isAdmin ? (
+                      <>
+                        <Button size="sm" className="h-7 px-2.5" onClick={() => decide(a.id, "approve")}>Approve</Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-red-700 border-red-300 hover:bg-red-50" onClick={() => decide(a.id, "reject")}>Reject</Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">Pending</span>
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-red-600" onClick={() => cancel(a.id)}>Cancel</Button>
+                      </>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Approved history */}
+      <Card className="mt-4">
+        <CardHeader><CardTitle className="text-sm">Approved adjustments</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          {history.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">No approved adjustments yet.</p>
+          ) : (
+            <ul className="divide-y px-4" style={{ borderColor: "var(--border)" }}>
+              {history.map((a) => (
+                <li key={a.id} className="flex items-start justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <div className="text-sm">
+                      <span className={cn("font-semibold tabular-nums", a.delta_gm >= 0 ? "text-emerald-700" : "text-red-700")}>
+                        {a.delta_gm >= 0 ? "+" : ""}{gm(a.delta_gm)}
+                      </span>
+                      <span className="ml-1 text-xs text-muted-foreground">to the real vault</span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{a.date} · {a.reason}</div>
+                  </div>
+                  {isAdmin ? (
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-red-600" onClick={() => cancel(a.id)}>
+                      Delete
+                    </Button>
+                  ) : null}
                 </li>
               ))}
             </ul>

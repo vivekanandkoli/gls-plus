@@ -137,7 +137,12 @@ CREATE TABLE IF NOT EXISTS "gls"."stock_adjustments" (
     "reason" "text" NOT NULL,
     "adjusted_by" integer,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "stock_adjustments_book_check" CHECK (("book" = ANY (ARRAY['official'::"text", 'unofficial'::"text"])))
+    "status" "text" DEFAULT 'approved'::"text" NOT NULL,
+    "approved_by" integer,
+    "approved_at" timestamp with time zone,
+    "rejection_reason" "text",
+    CONSTRAINT "stock_adjustments_book_check" CHECK (("book" = ANY (ARRAY['official'::"text", 'unofficial'::"text"]))),
+    CONSTRAINT "stock_adjustments_status_check" CHECK (("status" = ANY (ARRAY['pending'::"text", 'approved'::"text", 'rejected'::"text"])))
 );
 
 

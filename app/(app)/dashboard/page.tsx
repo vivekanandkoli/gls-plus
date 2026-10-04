@@ -268,11 +268,9 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground">
                     Actual physical stock = official + unofficial. Official stays as declared; the real vault is the undeclared balance.
                   </p>
-                  {isAdmin ? (
-                    <Link href="/stock" className="text-xs font-medium text-primary hover:underline">
-                      Adjust real stock →
-                    </Link>
-                  ) : null}
+                  <Link href="/stock" className="text-xs font-medium text-primary hover:underline">
+                    {isAdmin ? "Adjust real stock →" : "Request stock update →"}
+                  </Link>
                 </div>
               </CardContent>
             </Card>

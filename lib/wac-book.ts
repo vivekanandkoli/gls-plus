@@ -117,7 +117,12 @@ export async function fetchStockAdjustmentTotal(
   book: Book,
   year?: number
 ): Promise<number> {
-  let q = supabase.from("stock_adjustments").select("delta_gm").eq("book", book);
+  // Only approved adjustments affect the stock figure (pending ones await admin review).
+  let q = supabase
+    .from("stock_adjustments")
+    .select("delta_gm")
+    .eq("book", book)
+    .eq("status", "approved");
   if (year != null) {
     q = q.gte("date", `${year}-01-01`).lte("date", `${year}-12-31`);
   }
