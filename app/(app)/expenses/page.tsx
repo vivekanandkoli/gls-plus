@@ -327,22 +327,22 @@ export default function ExpensesPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Add entry</DialogTitle></DialogHeader>
           <form onSubmit={addEntry} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">Date
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">Date
                 <Input type="date" value={formState.date} onChange={(e) => setFormState({ ...formState, date: e.target.value })} required />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">Job ID (optional)
+              <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">Job ID (optional)
                 <Input value={formState.jobId} onChange={(e) => setFormState({ ...formState, jobId: e.target.value })} />
               </label>
             </div>
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">Description
               <Input value={formState.description} onChange={(e) => setFormState({ ...formState, description: e.target.value })} placeholder="e.g. Taxi, Cash received…" />
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">Received
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">Received
                 <Input type="number" step="0.01" value={formState.received} onChange={(e) => setFormState({ ...formState, received: e.target.value })} placeholder="0.00" />
               </label>
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">Expense
+              <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">Expense
                 <Input type="number" step="0.01" value={formState.expense} onChange={(e) => setFormState({ ...formState, expense: e.target.value })} placeholder="0.00" />
               </label>
             </div>
@@ -361,22 +361,22 @@ export default function ExpensesPage() {
           <DialogHeader><DialogTitle>Edit entry</DialogTitle></DialogHeader>
           {edit ? (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">Date
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">Date
                   <Input type="date" value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} />
                 </label>
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">Job ID
+                <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">Job ID
                   <Input value={edit.job_id ?? ""} onChange={(e) => setEdit({ ...edit, job_id: e.target.value })} />
                 </label>
               </div>
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">Description
                 <Input value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">Received
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">Received
                   <Input type="number" step="0.01" value={edit.received} onChange={(e) => setEdit({ ...edit, received: Number(e.target.value) })} />
                 </label>
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">Expense
+                <label className="flex min-w-0 flex-col gap-1 text-xs text-muted-foreground">Expense
                   <Input type="number" step="0.01" value={edit.expense} onChange={(e) => setEdit({ ...edit, expense: Number(e.target.value) })} />
                 </label>
               </div>
