@@ -19,6 +19,7 @@ type LogEntry = {
   action: string;
   transaction_id: string | null;
   performed_by: number | null;
+  performed_by_email: string | null;
   old_values: Record<string, unknown> | null;
   new_values: Record<string, unknown> | null;
 };
@@ -78,7 +79,7 @@ export default function ActivityLogPage() {
               <TableHead>Date</TableHead>
               <TableHead>Action</TableHead>
               <TableHead>Transaction</TableHead>
-              <TableHead>User ID</TableHead>
+              <TableHead>User</TableHead>
               <TableHead>Changes</TableHead>
             </TableRow>
           </TableHeader>
@@ -92,7 +93,7 @@ export default function ActivityLogPage() {
                 <TableCell className="font-mono text-xs">
                   {e.transaction_id?.slice(0, 8) ?? "-"}
                 </TableCell>
-                <TableCell>{e.performed_by ?? "-"}</TableCell>
+                <TableCell className="text-xs">{e.performed_by_email ?? (e.performed_by ? `#${e.performed_by}` : "-")}</TableCell>
                 <TableCell className="max-w-xs truncate text-xs text-muted-foreground">
                   {e.new_values
                     ? JSON.stringify(e.new_values)
