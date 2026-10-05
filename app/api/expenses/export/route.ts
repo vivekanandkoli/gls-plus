@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
+import * as XLSX from "xlsx";
 
 import { requireAppUser } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
 
-function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-/** GET /api/expenses/export — the current (filtered) ledger as a CSV download. */
+/** GET /api/expenses/export — the current (filtered) ledger as an .xlsx download. */
 export async function GET(req: Request) {
   const user = await requireAppUser();
   if (user instanceof NextResponse) return user;
@@ -46,26 +42,29 @@ export async function GET(req: Request) {
       if (data.length < 1000) break;
     }
 
-    const header = ["Date", "Description", "Job ID", "Received", "Expense", "Balance"];
-    const lines = [header.join(",")];
-    for (const r of rows) {
-      lines.push([
+    const aoa: (string | number)[][] = [
+      ["Date", "Description", "Job ID", "Received", "Expense", "Balance"],
+      ...rows.map((r) => [
         r.date,
-        csvCell(r.description),
-        csvCell(r.job_id ?? ""),
+        r.description ?? "",
+        r.job_id ?? "",
         Number(r.received) || 0,
         Number(r.expense) || 0,
         Number(r.balance) || 0,
-      ].join(","));
-    }
-    const csv = "﻿" + lines.join("\r\n"); // BOM so Excel reads UTF-8
+      ]),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 12 }, { wch: 40 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Expenses");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 
     const stamp = new Date().toISOString().slice(0, 10);
-    return new NextResponse(csv, {
+    return new NextResponse(new Uint8Array(buf), {
       status: 200,
       headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="expenses-${stamp}.csv"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="expenses-${stamp}.xlsx"`,
       },
     });
   } catch (e) {

@@ -171,10 +171,43 @@ export function TransactionFormDialog({
 
   const isUnofficial = form.book === "unofficial";
 
+  // Inline "add new client" at the picker.
+  const [extraClients, setExtraClients] = useState<Client[]>([]);
+  const [addingClient, setAddingClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [clientCreateErr, setClientCreateErr] = useState<string | null>(null);
+  const allClients = useMemo(() => [...extraClients, ...clients], [extraClients, clients]);
+
+  async function createNewClient() {
+    const name = newClientName.trim();
+    if (!name) return;
+    setCreatingClient(true);
+    setClientCreateErr(null);
+    try {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to create client");
+      const created: Client = d.client;
+      setExtraClients((xs) => [created, ...xs]);
+      set("clientId", created.id);
+      setNewClientName("");
+      setAddingClient(false);
+    } catch (e) {
+      setClientCreateErr(e instanceof Error ? e.message : "Failed to create client");
+    } finally {
+      setCreatingClient(false);
+    }
+  }
+
   // Details of the currently selected client, to show inline on the form.
   const selectedClient = useMemo(
-    () => clients.find((c) => c.id === form.clientId) ?? null,
-    [clients, form.clientId]
+    () => allClients.find((c) => c.id === form.clientId) ?? null,
+    [allClients, form.clientId]
   );
   // Merge in any edits made inline this session so the display stays fresh.
   const displayClient = useMemo(() => {
@@ -336,14 +369,41 @@ export function TransactionFormDialog({
                 <Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} />
               </Field>
               <Field label="Client">
-                <select className={selectCls} value={form.clientId} onChange={(e) => set("clientId", e.target.value)}>
-                  <option value="">None</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                {addingClient ? (
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      autoFocus
+                      value={newClientName}
+                      onChange={(e) => setNewClientName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void createNewClient(); } }}
+                      placeholder="New client name"
+                    />
+                    <Button type="button" size="sm" className="h-9 px-2.5" onClick={() => void createNewClient()} disabled={creatingClient || !newClientName.trim()}>
+                      {creatingClient ? "…" : "Add"}
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-9 px-2.5" onClick={() => { setAddingClient(false); setClientCreateErr(null); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <select
+                    className={selectCls}
+                    value={form.clientId}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") { setAddingClient(true); setNewClientName(""); return; }
+                      set("clientId", e.target.value);
+                    }}
+                  >
+                    <option value="">None</option>
+                    <option value="__new__">+ Add new client…</option>
+                    {allClients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {clientCreateErr ? <span className="text-xs text-red-600">{clientCreateErr}</span> : null}
               </Field>
               <Field label={isCreate ? "Invoice # (auto)" : "Invoice #"}>
                 <Input

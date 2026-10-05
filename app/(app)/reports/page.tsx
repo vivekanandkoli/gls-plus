@@ -10,6 +10,7 @@ import {
   Wallet,
   Layers,
   Banknote,
+  Table2,
 } from "lucide-react";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
@@ -55,6 +56,16 @@ const publicReportLinks = [
     accent: "border-l-yellow-500",
     iconBg: "bg-yellow-100 dark:bg-yellow-900/40",
     iconColor: "text-yellow-700 dark:text-yellow-400",
+  },
+  {
+    href: "/reports/stock-register",
+    label: "Stock Register",
+    desc: "Full buy/sell register with running stock - matches your spreadsheet, exports to Excel",
+    icon: Table2,
+    gradient: "from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/20",
+    accent: "border-l-amber-500",
+    iconBg: "bg-amber-100 dark:bg-amber-900/40",
+    iconColor: "text-amber-700 dark:text-amber-400",
   },
   {
     href: "/reports/client-pl",
