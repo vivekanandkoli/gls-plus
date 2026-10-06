@@ -124,6 +124,97 @@ function PreviewInvoiceFooter({ v }: { v: Values }) {
   );
 }
 
+/**
+ * Company bank details for SELL invoices. Self-contained: it loads and saves
+ * through /api/settings/bank (service role) so it is independent of the main
+ * Settings form, which writes to a different (legacy) column set.
+ */
+function BankDetailsCard() {
+  const [bankName, setBankName] = useState("");
+  const [accName, setAccName] = useState("");
+  const [accNo, setAccNo] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/settings/bank");
+        const d = await res.json();
+        if (active && res.ok && d.bank) {
+          setBankName(d.bank.bank_name ?? "");
+          setAccName(d.bank.bank_account_name ?? "");
+          setAccNo(d.bank.bank_account_number ?? "");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/settings/bank", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bank_name: bankName,
+          bank_account_name: accName,
+          bank_account_number: accNo,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "Failed to save");
+      setStatus("Saved.");
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setStatus(null), 2500);
+    }
+  };
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="text-sm">Bank details for payment</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Shown on SELL invoices so clients know where to transfer payment.
+        </p>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Bank</label>
+            <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="Kasikorn Bank" disabled={loading} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Account name</label>
+            <Input value={accName} onChange={(e) => setAccName(e.target.value)} placeholder="GLS PLUS CO. LTD" disabled={loading} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Account number</label>
+            <Input value={accNo} onChange={(e) => setAccNo(e.target.value)} placeholder="1663787469" disabled={loading} />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button onClick={save} disabled={saving || loading}>
+            {saving ? "Saving..." : "Save bank details"}
+          </Button>
+          {status && <span className="text-sm text-muted-foreground">{status}</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const { isAdmin } = useAppUser();
   const [loading, setLoading] = useState(false);
@@ -694,6 +785,9 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Bank details for payment (self-contained, works against real schema) */}
+      {isAdmin && <BankDetailsCard />}
 
       {/* Notifications */}
       <Card className="mt-6">

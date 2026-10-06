@@ -19,6 +19,9 @@ export type Settings = {
   tax_id: string | null;
   invoice_footer_note: string | null;
   logo_data_url: string | null;
+  bank_name: string | null;
+  bank_account_name: string | null;
+  bank_account_number: string | null;
 };
 
 export type TxDetail = {
@@ -38,29 +41,51 @@ export type TxDetail = {
 
 // ─── Amount in words ──────────────────────────────────────────────────────────
 
-const ones = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-  "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
-const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const ONES = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+  "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+const TENS = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 
-function wordsUnder1000(n: number): string {
-  if (n === 0) return "";
-  if (n < 20) return ones[n];
-  if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? " " + ones[n % 10] : "");
-  return ones[Math.floor(n / 100)] + " hundred" + (n % 100 ? " " + wordsUnder1000(n % 100) : "");
+function wordsUnder100(n: number): string {
+  if (n < 20) return ONES[n];
+  const t = Math.floor(n / 10);
+  const o = n % 10;
+  return TENS[t] + (o ? "-" + ONES[o] : "");
 }
 
-function amountInWords(amount: number): string {
-  const n = Math.round(amount);
-  if (n === 0) return "zero baht";
+function wordsUnder1000(n: number): string {
+  if (n < 100) return wordsUnder100(n);
+  return ONES[Math.floor(n / 100)] + " Hundred" + (n % 100 ? " " + wordsUnder100(n % 100) : "");
+}
+
+function intToWords(n: number): string {
+  if (n === 0) return "Zero";
   const parts: string[] = [];
-  if (n >= 1_000_000) { parts.push(wordsUnder1000(Math.floor(n / 1_000_000)) + " million"); }
-  const rem1 = n % 1_000_000;
-  if (rem1 >= 1000) { parts.push(wordsUnder1000(Math.floor(rem1 / 1000)) + " thousand"); }
-  const rem2 = rem1 % 1000;
-  if (rem2 > 0) { parts.push(wordsUnder1000(rem2)); }
-  const words = parts.join(" and ");
-  // Capitalise first letter
-  return words.charAt(0).toUpperCase() + words.slice(1) + " baht only";
+  if (n >= 1_000_000) {
+    parts.push(wordsUnder1000(Math.floor(n / 1_000_000)) + " Million");
+    n %= 1_000_000;
+  }
+  if (n >= 1000) {
+    parts.push(wordsUnder1000(Math.floor(n / 1000)) + " Thousand");
+    n %= 1000;
+  }
+  if (n > 0) parts.push(wordsUnder1000(n));
+  return parts.join(" ");
+}
+
+/**
+ * Thai currency words: Baht for the whole part, Satang for the 2-decimal part.
+ * e.g. 1,234.56 -> "One Thousand Two Hundred Thirty-Four Baht and Fifty-Six Satang Only"
+ *      125,050  -> "One Hundred Twenty-Five Thousand Fifty Baht Only"
+ */
+function amountInWords(amount: number): string {
+  const cents = Math.round((amount || 0) * 100);
+  const baht = Math.floor(cents / 100);
+  const satang = cents % 100;
+  const bahtWords = `${intToWords(baht)} Baht`;
+  if (satang > 0) {
+    return `${bahtWords} and ${intToWords(satang)} Satang Only`;
+  }
+  return `${bahtWords} Only`;
 }
 
 function fmtNum(n: number | null | undefined, decimals = 2): string {
@@ -101,6 +126,12 @@ export function InvoiceDocument({
   const phone = settings.phone ?? "087-039-8795";
   const email = settings.email ?? "glsplusdb@gmail.com";
   const taxId = settings.tax_id ?? "0105563120430";
+  // Company bank details for incoming payments (shown on SELL invoices).
+  // Fall back to the known account so the invoice is correct even before Settings is filled.
+  const bankName = settings.bank_name?.trim() ? settings.bank_name : "Kasikorn Bank";
+  const bankAccName = settings.bank_account_name?.trim() ? settings.bank_account_name : "GLS PLUS CO. LTD";
+  const bankAccNo = settings.bank_account_number?.trim() ? settings.bank_account_number : "1663787469";
+  const hasBankDetails = Boolean(bankName || bankAccName || bankAccNo);
   // Fall back to the bundled company logo when no custom logo is stored in settings.
   const logoSrc = settings.logo_data_url?.trim() ? settings.logo_data_url : "/logo.png";
 
@@ -213,6 +244,25 @@ export function InvoiceDocument({
       marginTop: "8px",
       background: "#faf8f5",
     },
+    payToBox: {
+      border: "1px solid #c9a227",
+      borderRadius: "4px",
+      padding: "7px 10px",
+      marginTop: "10px",
+      background: "#faf8f5",
+      fontSize: "10px",
+      color: "#333",
+    },
+    payToTitle: {
+      fontSize: "9px", fontWeight: 700, letterSpacing: "0.06em",
+      color: "#8a6d1b", textTransform: "uppercase" as const, marginBottom: "3px",
+    },
+    payToGrid: {
+      display: "grid", gridTemplateColumns: "auto 1fr", gap: "1px 10px",
+      fontSize: "10px",
+    },
+    payToLabel: { color: "#777" },
+    payToValue: { fontWeight: 700, color: "#111" },
     paymentRow: {
       display: "flex", alignItems: "center", gap: "20px",
       fontSize: "11px", marginTop: "8px", flexWrap: "wrap" as const,
@@ -388,6 +438,21 @@ export function InvoiceDocument({
         </div>
       </div>
 
+      {/* ── Pay-to / company bank details (SELL invoices only) ── */}
+      {tx.type === "SELL" && hasBankDetails && (
+        <div style={s.payToBox}>
+          <div style={s.payToTitle}>โอนเงินเข้าบัญชี / Payment - transfer to</div>
+          <div style={s.payToGrid}>
+            <span style={s.payToLabel}>ธนาคาร / Bank:</span>
+            <span style={s.payToValue}>{bankName}</span>
+            <span style={s.payToLabel}>ชื่อบัญชี / A/C Name:</span>
+            <span style={s.payToValue}>{bankAccName}</span>
+            <span style={s.payToLabel}>เลขที่บัญชี / A/C No.:</span>
+            <span style={{ ...s.payToValue, fontFamily: "monospace", letterSpacing: "0.04em" }}>{bankAccNo}</span>
+          </div>
+        </div>
+      )}
+
       <div style={{ ...s.dividerThin, marginTop: "10px" }} />
 
       {/* ── Payment method ── */}
@@ -475,6 +540,9 @@ export function PrintInvoiceButton({ tx }: { tx: TxDetail }) {
     tax_id: null,
     invoice_footer_note: null,
     logo_data_url: null,
+    bank_name: null,
+    bank_account_name: null,
+    bank_account_number: null,
   });
 
   useEffect(() => {
@@ -483,7 +551,7 @@ export function PrintInvoiceButton({ tx }: { tx: TxDetail }) {
         const supabase = getSupabaseClient() as any;
         const { data } = await supabase
           .from("settings")
-          .select("company_name_en,company_name_th,address_en,address_th,phone,email,tax_id,invoice_footer_note,logo_data_url")
+          .select("company_name_en,company_name_th,address_en,address_th,phone,email,tax_id,invoice_footer_note,logo_data_url,bank_name,bank_account_name,bank_account_number")
           .limit(1)
           .maybeSingle();
         if (data) setSettings(data as Settings);

@@ -41,6 +41,9 @@ const DEFAULT_SETTINGS: Settings = {
   tax_id: "0105563120430",
   invoice_footer_note: null,
   logo_data_url: null,
+  bank_name: null,
+  bank_account_name: null,
+  bank_account_number: null,
 };
 
 export default function InvoicePage() {
@@ -102,7 +105,7 @@ export default function InvoicePage() {
         // Company settings (real column names → invoice Settings shape).
         const { data: s } = await supabase
           .from("settings")
-          .select("company_name,company_name_th,address_1,address_2,phone,email,tax_id,invoice_footer,logo_url")
+          .select("company_name,company_name_th,address_1,address_2,phone,email,tax_id,invoice_footer,logo_url,bank_name,bank_account_name,bank_account_number")
           .limit(1)
           .maybeSingle();
         if (s) {
@@ -117,6 +120,9 @@ export default function InvoicePage() {
             tax_id: s.tax_id || prev.tax_id,
             invoice_footer_note: s.invoice_footer || prev.invoice_footer_note,
             logo_data_url: s.logo_url || prev.logo_data_url,
+            bank_name: s.bank_name || prev.bank_name,
+            bank_account_name: s.bank_account_name || prev.bank_account_name,
+            bank_account_number: s.bank_account_number || prev.bank_account_number,
           }));
         }
       } catch (e) {

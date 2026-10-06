@@ -81,6 +81,9 @@ const DEFAULT_SETTINGS: Settings = {
   tax_id: "0105563120430",
   invoice_footer_note: null,
   logo_data_url: null,
+  bank_name: null,
+  bank_account_name: null,
+  bank_account_number: null,
 };
 
 // ─── Invoice preview panel ────────────────────────────────────────────────────
@@ -208,7 +211,7 @@ export default function InvoicesPage() {
         const supabase = getSupabaseClient() as any;
         const { data } = await supabase
           .from("settings")
-          .select("company_name,company_name_th,address_1,address_2,phone,email,tax_id,invoice_footer,logo_url")
+          .select("company_name,company_name_th,address_1,address_2,phone,email,tax_id,invoice_footer,logo_url,bank_name,bank_account_name,bank_account_number")
           .limit(1)
           .maybeSingle();
         if (!data) return;
@@ -223,6 +226,9 @@ export default function InvoicesPage() {
           tax_id: data.tax_id || prev.tax_id,
           invoice_footer_note: data.invoice_footer || prev.invoice_footer_note,
           logo_data_url: data.logo_url || prev.logo_data_url,
+          bank_name: data.bank_name || prev.bank_name,
+          bank_account_name: data.bank_account_name || prev.bank_account_name,
+          bank_account_number: data.bank_account_number || prev.bank_account_number,
         }));
       } catch { /* ignore - defaults apply */ }
     };

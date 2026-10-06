@@ -211,7 +211,9 @@
     height: 297mm !important;
     max-width: 210mm !important;
     max-height: 297mm !important;
-    padding: 10mm !important;
+    /* Even 15mm margin on all four sides; large enough that no printer clips
+     * the frame's bottom border (its non-printable edge). */
+    padding: 15mm !important;
     margin: 0 !important;
     overflow: hidden !important;
     break-inside: avoid !important;
@@ -222,10 +224,16 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  /* The frame fills the padded area, so the border is evenly inset all round. */
+  /*
+   * The frame fills the padded area so the border is evenly inset all round.
+   * Use min-height (not height:100%) because a percentage height here prints
+   * unreliably — it can collapse or push the bottom border past the page edge,
+   * leaving the frame open at the bottom. 267mm = A4 height (297) minus the two
+   * 15mm margins, so the box fills the printable area and always closes.
+   */
   .invoice-frame {
     width: 100% !important;
-    height: 100% !important;
+    min-height: 267mm !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
   }
