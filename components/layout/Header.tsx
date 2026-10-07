@@ -3,6 +3,7 @@
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { cn } from "@/lib/utils";
 
@@ -53,8 +54,9 @@ export function Header({
             </p>
           ) : null}
         </div>
-        {/* Mobile-only account menu, aligned right of the title. */}
-        <div className="shrink-0 md:hidden">
+        {/* Mobile-only theme toggle + account menu, aligned right of the title. */}
+        <div className="flex shrink-0 items-center gap-2 md:hidden">
+          <ThemeToggle />
           <UserMenu />
         </div>
       </div>
@@ -86,6 +88,7 @@ export function Header({
             {searchKbd}
           </kbd>
         </button>
+        <ThemeToggle />
         <UserMenu />
       </div>
     </header>
