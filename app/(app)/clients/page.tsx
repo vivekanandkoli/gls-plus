@@ -26,7 +26,10 @@ type ClientRow = {
   name: string;
   phone: string | null;
   email: string | null;
+  tax_id: string | null;
 };
+
+type SortKey = "name" | "phone" | "email" | "tax_id" | "buy" | "sell" | "last";
 
 type TxLite = {
   client_id: string;
@@ -71,7 +74,7 @@ export default function ClientsPage() {
       setLoadError(null);
       try {
         const supabase = getSupabaseClient() as any;
-        let query = supabase.from("clients").select("id,name,phone,email").order("name");
+        let query = supabase.from("clients").select("id,name,phone,email,tax_id").order("name");
         if (q.trim()) query = query.ilike("name", `%${q.trim()}%`);
         const { data, error } = await query.limit(200);
         if (error) throw error;
@@ -137,6 +140,47 @@ export default function ClientsPage() {
       setDeletingId(null);
     }
   }
+
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(k);
+      setSortDir("asc");
+    }
+  }
+  const sortArrow = (k: SortKey) => (sortKey === k ? (sortDir === "asc" ? " ↑" : " ↓") : "");
+
+  const sortedClients = useMemo(() => {
+    const aggOf = (id: string) => txByClient[id] ?? { buyGrams: 0, sellGrams: 0, lastDate: null };
+    const cmpStr = (a: string | null, b: string | null) => {
+      const x = (a ?? "").toLowerCase();
+      const y = (b ?? "").toLowerCase();
+      // Empty values always sort last, regardless of direction, so blanks cluster.
+      if (!x && y) return 1;
+      if (x && !y) return -1;
+      if (x === y) return 0;
+      return (x < y ? -1 : 1) * (sortDir === "asc" ? 1 : -1);
+    };
+    const cmpNum = (a: number, b: number) => (a - b) * (sortDir === "asc" ? 1 : -1);
+    const arr = [...clients];
+    arr.sort((a, b) => {
+      switch (sortKey) {
+        case "name": return cmpStr(a.name, b.name);
+        case "phone": return cmpStr(a.phone, b.phone);
+        case "email": return cmpStr(a.email, b.email);
+        case "tax_id": return cmpStr(a.tax_id, b.tax_id);
+        case "buy": return cmpNum(aggOf(a.id).buyGrams, aggOf(b.id).buyGrams);
+        case "sell": return cmpNum(aggOf(a.id).sellGrams, aggOf(b.id).sellGrams);
+        case "last": return cmpStr(aggOf(a.id).lastDate, aggOf(b.id).lastDate);
+        default: return 0;
+      }
+    });
+    return arr;
+  }, [clients, txByClient, sortKey, sortDir]);
 
   return (
     <PageWrapper
@@ -207,7 +251,7 @@ export default function ClientsPage() {
           {/* Mobile: tap-friendly client list */}
           <div className="md:hidden rounded-xl border bg-card shadow-[var(--shadow-sm)]" style={{ borderColor: "var(--border)" }}>
             <ul className="divide-y px-4" style={{ borderColor: "var(--border)" }}>
-              {clients.map((c) => {
+              {sortedClients.map((c) => {
                 const agg = txByClient[c.id] ?? { buyGrams: 0, sellGrams: 0, lastDate: null };
                 return (
                   <li key={c.id} className="flex items-center gap-2">
@@ -218,6 +262,9 @@ export default function ClientsPage() {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-foreground">{c.name}</div>
                         <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                          Tax ID: {c.tax_id || "-"}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
                           {c.phone || c.email || "No contact info"}
                         </div>
                         <div className="mt-1 flex items-center gap-3 text-[11px]">
@@ -251,17 +298,18 @@ export default function ClientsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead className="text-right">Total BUY (g)</TableHead>
-                  <TableHead className="text-right">Total SELL (g)</TableHead>
-                  <TableHead>Last Transaction</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>Name{sortArrow("name")}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("tax_id")}>Tax ID{sortArrow("tax_id")}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("phone")}>Phone{sortArrow("phone")}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("email")}>Email{sortArrow("email")}</TableHead>
+                  <TableHead className="cursor-pointer select-none text-right" onClick={() => toggleSort("buy")}>Total BUY (g){sortArrow("buy")}</TableHead>
+                  <TableHead className="cursor-pointer select-none text-right" onClick={() => toggleSort("sell")}>Total SELL (g){sortArrow("sell")}</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("last")}>Last Transaction{sortArrow("last")}</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clients.map((c) => {
+                {sortedClients.map((c) => {
                   const agg = txByClient[c.id] ?? { buyGrams: 0, sellGrams: 0, lastDate: null };
                   return (
                     <TableRow
@@ -270,6 +318,9 @@ export default function ClientsPage() {
                       onClick={() => router.push(`/clients/${c.id}`)}
                     >
                       <TableCell className="font-medium">{c.name}</TableCell>
+                      <TableCell className={cn("font-mono text-xs", !c.tax_id && "text-muted-foreground")}>
+                        {c.tax_id || "-"}
+                      </TableCell>
                       <TableCell>{c.phone ?? "-"}</TableCell>
                       <TableCell>{c.email ?? "-"}</TableCell>
                       <TableCell className="text-right">
