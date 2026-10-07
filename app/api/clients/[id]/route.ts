@@ -73,3 +73,43 @@ export async function PATCH(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+/** DELETE /api/clients/[id] - remove a client, but only when it has no
+ *  transactions (the FK is NO ACTION, so the DB would reject it anyway;
+ *  we check first to return a clear message instead of a raw FK error). */
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await requireAppUser();
+  if (user instanceof NextResponse) return user;
+
+  const { id } = await params;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = createSupabaseServiceClient() as any;
+
+    const { count, error: countErr } = await sb
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", id);
+    if (countErr) throw new Error(countErr.message);
+
+    if ((count ?? 0) > 0) {
+      return NextResponse.json(
+        {
+          error: `This client has ${count} transaction(s). Reassign or remove those first before deleting the client.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    const { error } = await sb.from("clients").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to delete client";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

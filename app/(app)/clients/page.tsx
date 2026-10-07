@@ -41,6 +41,8 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientRow[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [txByClient, setTxByClient] = useState<
     Record<
       string,
@@ -118,6 +120,24 @@ export default function ClientsPage() {
     return () => clearTimeout(t);
   }, [canQuery, q]);
 
+  async function handleDelete(c: ClientRow) {
+    if (typeof window !== "undefined" && !window.confirm(`Delete client "${c.name}"? This cannot be undone.`)) {
+      return;
+    }
+    setDeletingId(c.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/clients/${c.id}`, { method: "DELETE" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "Failed to delete client");
+      setClients((prev) => prev.filter((x) => x.id !== c.id));
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to delete client");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <PageWrapper
       title="Clients"
@@ -129,6 +149,14 @@ export default function ClientsPage() {
           role="alert"
         >
           {loadError}
+        </div>
+      ) : null}
+      {actionError ? (
+        <div
+          className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
+          {actionError}
         </div>
       ) : null}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -182,10 +210,10 @@ export default function ClientsPage() {
               {clients.map((c) => {
                 const agg = txByClient[c.id] ?? { buyGrams: 0, sellGrams: 0, lastDate: null };
                 return (
-                  <li key={c.id}>
+                  <li key={c.id} className="flex items-center gap-2">
                     <button
                       onClick={() => router.push(`/clients/${c.id}`)}
-                      className="flex w-full items-center justify-between gap-3 py-3 text-left active:bg-muted/50"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3 py-3 text-left active:bg-muted/50"
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-foreground">{c.name}</div>
@@ -201,6 +229,17 @@ export default function ClientsPage() {
                         {agg.lastDate ?? "—"}
                       </div>
                     </button>
+                    {!agg.lastDate ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 text-destructive hover:text-destructive"
+                        disabled={deletingId === c.id}
+                        onClick={() => void handleDelete(c)}
+                      >
+                        {deletingId === c.id ? "…" : "Delete"}
+                      </Button>
+                    ) : null}
                   </li>
                 );
               })}
@@ -241,16 +280,31 @@ export default function ClientsPage() {
                       </TableCell>
                       <TableCell>{agg.lastDate ?? "-"}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/clients/${c.id}`);
-                          }}
-                        >
-                          View
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/clients/${c.id}`);
+                            }}
+                          >
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:text-destructive"
+                            disabled={!!agg.lastDate || deletingId === c.id}
+                            title={agg.lastDate ? "Has transactions - cannot delete" : "Delete client"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDelete(c);
+                            }}
+                          >
+                            {deletingId === c.id ? "Deleting…" : "Delete"}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
