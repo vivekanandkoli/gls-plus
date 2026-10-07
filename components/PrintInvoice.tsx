@@ -74,8 +74,8 @@ function intToWords(n: number): string {
 
 /**
  * Thai currency words: Baht for the whole part, Satang for the 2-decimal part.
- * e.g. 1,234.56 -> "One Thousand Two Hundred Thirty-Four Baht and Fifty-Six Satang Only"
- *      125,050  -> "One Hundred Twenty-Five Thousand Fifty Baht Only"
+ * e.g. 1,234.56 -> "One Thousand Two Hundred Thirty-Four Baht and Fifty-Six Satang"
+ *      125,050  -> "One Hundred Twenty-Five Thousand Fifty Baht"
  */
 function amountInWords(amount: number): string {
   const cents = Math.round((amount || 0) * 100);
@@ -83,9 +83,9 @@ function amountInWords(amount: number): string {
   const satang = cents % 100;
   const bahtWords = `${intToWords(baht)} Baht`;
   if (satang > 0) {
-    return `${bahtWords} and ${intToWords(satang)} Satang Only`;
+    return `${bahtWords} and ${intToWords(satang)} Satang`;
   }
-  return `${bahtWords} Only`;
+  return bahtWords;
 }
 
 function fmtNum(n: number | null | undefined, decimals = 2): string {
