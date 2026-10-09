@@ -4,10 +4,12 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight,
   BarChart3,
+  CalendarClock,
   FileSpreadsheet,
   FileText,
   HandCoins,
   LayoutDashboard,
+  PiggyBank,
   PlusCircle,
   ScrollText,
   Settings2,
@@ -44,6 +46,12 @@ export const PRIMARY_NAV: AppNavItem[] = [
     keywords: ["buy", "sell", "trade", "paired"],
   },
   {
+    href: "/bookings",
+    label: "Bookings",
+    icon: CalendarClock,
+    keywords: ["advance", "booking", "reserve", "delivery", "buy", "sell"],
+  },
+  {
     href: "/invoices",
     label: "Invoices",
     icon: FileText,
@@ -68,6 +76,12 @@ export const PRIMARY_NAV: AppNavItem[] = [
     keywords: ["expense", "cash", "balance", "ledger", "received", "spending"],
   },
   {
+    href: "/other-income",
+    label: "Other Income",
+    icon: PiggyBank,
+    keywords: ["rental", "consultant", "income", "other", "misc", "profit"],
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: Settings2,
@@ -87,6 +101,12 @@ export const QUICK_ACTIONS: AppNavItem[] = [
     label: "New deal",
     icon: PlusCircle,
     keywords: ["create", "buy", "sell", "trade"],
+  },
+  {
+    href: "/bookings?new=1",
+    label: "New booking",
+    icon: CalendarClock,
+    keywords: ["advance", "reserve", "booking", "buy", "sell"],
   },
   {
     href: "/transactions/import",
