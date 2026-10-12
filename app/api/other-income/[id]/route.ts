@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
+import { canonicalCategory } from "@/lib/other-income";
+import { logAudit } from "@/lib/transaction-audit";
 
 const SELECT = "id,date,book,kind,category,amount_thb,description,created_by,created_at";
 
@@ -36,9 +38,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createSupabaseServiceClient() as any;
+    if (payload.category) payload.category = await canonicalCategory(sb, payload.category);
+    const { data: before } = await sb.from("other_income").select(SELECT).eq("id", id).maybeSingle();
     const { data, error } = await sb.from("other_income").update(payload).eq("id", id).select(SELECT).maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+
+    await logAudit({ entityType: "other_income", entityId: id, action: "updated", performedBy: admin.id, oldValues: before ?? null, newValues: data });
 
     return NextResponse.json({ row: data });
   } catch (e) {
@@ -56,8 +62,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createSupabaseServiceClient() as any;
+    const { data: before } = await sb.from("other_income").select(SELECT).eq("id", id).maybeSingle();
     const { error } = await sb.from("other_income").delete().eq("id", id);
     if (error) throw new Error(error.message);
+    await logAudit({ entityType: "other_income", entityId: id, action: "deleted", performedBy: admin.id, oldValues: before ?? null });
     return NextResponse.json({ ok: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete entry";

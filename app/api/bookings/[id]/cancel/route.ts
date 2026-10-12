@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAppUser } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
+import { logAudit } from "@/lib/transaction-audit";
 
 /** POST /api/bookings/[id]/cancel — mark a pending booking cancelled. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -29,6 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .select("id,status,cancelled_reason")
       .maybeSingle();
     if (error) throw new Error(error.message);
+    await logAudit({ entityType: "booking", entityId: id, action: "cancelled", performedBy: user.id, newValues: { status: "cancelled", cancelled_reason: reason } });
     return NextResponse.json({ booking: data });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to cancel booking";

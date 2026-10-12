@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAppUser } from "@/lib/auth-server";
 import { nextInvoiceNumber } from "@/lib/invoice-number";
-import { logTransactionAudit } from "@/lib/transaction-audit";
+import { logAudit, logTransactionAudit } from "@/lib/transaction-audit";
 import { isAdmin, type Book, type PaymentMode } from "@/lib/rbac";
 import { initialStatusForRole } from "@/lib/transaction-permissions";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
@@ -41,7 +41,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const body = await req.json().catch(() => ({}));
     const book: Book = b.book === "official" ? "official" : "unofficial";
     const type: "BUY" | "SELL" = b.type;
-    const clientId: string | null = b.client_id ?? null;
+    const clientId: string | null =
+      "clientId" in body ? (typeof body.clientId === "string" && body.clientId ? body.clientId : null) : (b.client_id ?? null);
 
     const weight = body.weightGrams != null && body.weightGrams !== "" ? Number(body.weightGrams) : Number(b.weight_grams);
     const rate = body.ratePerGram != null && body.ratePerGram !== "" ? Number(body.ratePerGram) : Number(b.rate_per_gram);
@@ -100,6 +101,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       .select("id,status,converted_txn_id")
       .maybeSingle();
     if (upErr) throw new Error(upErr.message);
+
+    await logAudit({
+      entityType: "booking",
+      entityId: id,
+      action: "delivered",
+      performedBy: user.id,
+      newValues: { status: "delivered", converted_txn_id: inserted.id, invoice_number: inserted.invoice_number },
+    });
 
     return NextResponse.json({ transaction: inserted, booking: updatedBooking }, { status: 201 });
   } catch (e) {

@@ -72,6 +72,57 @@ const blankForm = () => ({
   notes: "",
 });
 
+/** Client dropdown with an inline "+ Add new client…" option. */
+function ClientPicker({
+  clients, value, onChange, onCreate,
+}: {
+  clients: ClientLite[];
+  value: string;
+  onChange: (id: string) => void;
+  onCreate: (name: string) => Promise<ClientLite | null>;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const selectCls = "rounded-md border bg-background px-2 py-1.5 text-sm h-9 w-full";
+
+  async function add() {
+    if (!name.trim()) return;
+    setBusy(true);
+    const c = await onCreate(name.trim());
+    setBusy(false);
+    if (c) { onChange(c.id); setName(""); setAdding(false); }
+  }
+
+  if (adding) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="New client name"
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void add(); } }}
+          autoFocus
+        />
+        <Button type="button" size="sm" onClick={() => void add()} disabled={busy || !name.trim()}>{busy ? "…" : "Add"}</Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => { setAdding(false); setName(""); }}>Cancel</Button>
+      </div>
+    );
+  }
+  return (
+    <select
+      value={value}
+      onChange={(e) => { if (e.target.value === "__add__") setAdding(true); else onChange(e.target.value); }}
+      className={selectCls}
+      style={{ borderColor: "var(--border)" }}
+    >
+      <option value="">None</option>
+      <option value="__add__">+ Add new client…</option>
+      {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
+  );
+}
+
 function BookingsInner() {
   const searchParams = useSearchParams();
 
@@ -94,9 +145,10 @@ function BookingsInner() {
 
   // Convert dialog
   const [convert, setConvert] = useState<Booking | null>(null);
-  const [cvForm, setCvForm] = useState({ weightGrams: "", ratePerGram: "", date: "" });
+  const [cvForm, setCvForm] = useState({ weightGrams: "", ratePerGram: "", date: "", clientId: "", paymentMode: "bank", vatPercent: "" });
   const [converting, setConverting] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
+  const [invoicePreview, setInvoicePreview] = useState<string>("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -180,15 +232,53 @@ function BookingsInner() {
     }
   }
 
+  async function createClient(name: string): Promise<ClientLite | null> {
+    try {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "Failed to add client");
+      const c: ClientLite = { id: d.client.id, name: d.client.name };
+      setClients((prev) => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)));
+      return c;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add client");
+      return null;
+    }
+  }
+
   function openConvert(b: Booking) {
     setConvert(b);
     setCvForm({
       weightGrams: String(b.weight_grams ?? ""),
       ratePerGram: String(b.rate_per_gram ?? ""),
       date: b.expected_delivery_date || new Date().toISOString().slice(0, 10),
+      clientId: b.client_id ?? "",
+      paymentMode: b.book === "unofficial" ? "cash" : "bank",
+      vatPercent: "",
     });
+    setInvoicePreview("");
     setCvError(null);
   }
+
+  // Preview the invoice number the conversion will assign.
+  useEffect(() => {
+    if (!convert) return;
+    let active = true;
+    (async () => {
+      try {
+        const p = new URLSearchParams({ book: convert.book, type: convert.type, date: cvForm.date });
+        const res = await fetch(`/api/invoice-number/preview?${p.toString()}`);
+        const d = await res.json();
+        if (active && res.ok) setInvoicePreview(d.invoiceNumber ?? "");
+      } catch { /* ignore */ }
+    })();
+    return () => { active = false; };
+  }, [convert, cvForm.date]);
+
   async function doConvert() {
     if (!convert) return;
     setConverting(true);
@@ -201,6 +291,9 @@ function BookingsInner() {
           weightGrams: cvForm.weightGrams === "" ? undefined : Number(cvForm.weightGrams),
           ratePerGram: cvForm.ratePerGram === "" ? undefined : Number(cvForm.ratePerGram),
           date: cvForm.date,
+          clientId: cvForm.clientId || null,
+          paymentMode: cvForm.paymentMode,
+          vatPercent: convert.book === "official" && cvForm.vatPercent !== "" ? Number(cvForm.vatPercent) : undefined,
         }),
       });
       const d = await res.json();
@@ -380,10 +473,7 @@ function BookingsInner() {
             </div>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Client (optional)</span>
-              <select value={form.clientId} onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))} className={cn(selectCls, "h-9")} style={{ borderColor: "var(--border)" }}>
-                <option value="">None</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <ClientPicker clients={clients} value={form.clientId} onChange={(id) => setForm((f) => ({ ...f, clientId: id }))} onCreate={createClient} />
             </label>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-sm">
@@ -428,9 +518,14 @@ function BookingsInner() {
           {convert ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                {convert.type} · {convert.book} · {convert.clientName ?? "no client"}. Adjust the actual delivered
-                figures if they differ, then confirm — this creates the real transaction and marks the booking delivered.
+                <span className={cn("font-medium", convert.type === "BUY" ? "text-emerald-600" : "text-amber-700")}>{convert.type}</span>
+                {" · "}{convert.book}. Adjust the actual delivered figures if they differ, then confirm — this creates the real
+                transaction and marks the booking delivered.
               </p>
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-muted-foreground">Client</span>
+                <ClientPicker clients={clients} value={cvForm.clientId} onChange={(id) => setCvForm((f) => ({ ...f, clientId: id }))} onCreate={createClient} />
+              </label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <label className="flex flex-col gap-1 text-sm">
                   <span className="text-muted-foreground">Weight (g)</span>
@@ -445,8 +540,28 @@ function BookingsInner() {
                   <Input type="date" value={cvForm.date} onChange={(e) => setCvForm((f) => ({ ...f, date: e.target.value }))} />
                 </label>
               </div>
-              <div className="text-xs text-muted-foreground">
-                Amount: <span className="font-medium text-foreground">{B}{fmt((Number(cvForm.weightGrams) || 0) * (Number(cvForm.ratePerGram) || 0))}</span>
+              {convert.book === "official" ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="text-muted-foreground">Payment mode</span>
+                    <select value={cvForm.paymentMode} onChange={(e) => setCvForm((f) => ({ ...f, paymentMode: e.target.value }))} className={cn(selectCls, "h-9")} style={{ borderColor: "var(--border)" }}>
+                      <option value="bank">Bank</option>
+                      <option value="qr">QR</option>
+                      <option value="cheque">Cheque</option>
+                      <option value="cash">Cash</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="text-muted-foreground">VAT %</span>
+                    <Input type="number" inputMode="decimal" value={cvForm.vatPercent} onChange={(e) => setCvForm((f) => ({ ...f, vatPercent: e.target.value }))} placeholder="0" />
+                  </label>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Unofficial book is cash-only.</p>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>Amount: <span className="font-medium text-foreground">{B}{fmt((Number(cvForm.weightGrams) || 0) * (Number(cvForm.ratePerGram) || 0))}</span></span>
+                <span>Invoice: <span className="font-mono font-medium text-foreground">{invoicePreview || "…"}</span></span>
               </div>
               {cvError && <p className="text-sm text-destructive">{cvError}</p>}
             </div>

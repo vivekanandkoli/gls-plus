@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAppUser } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
+import { logAudit } from "@/lib/transaction-audit";
 
 const SELECT =
   "id,book,type,client_id,weight_grams,rate_per_gram,amount_thb,booking_date,expected_delivery_date,status,converted_txn_id,notes,cancelled_reason,created_by,created_at";
@@ -54,8 +55,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (Object.keys(payload).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 
+    const { data: before } = await sb.from("bookings").select(SELECT).eq("id", id).maybeSingle();
     const { data, error } = await sb.from("bookings").update(payload).eq("id", id).select(SELECT).maybeSingle();
     if (error) throw new Error(error.message);
+    await logAudit({ entityType: "booking", entityId: id, action: "updated", performedBy: user.id, oldValues: before ?? null, newValues: data });
     return NextResponse.json({ booking: data });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to update booking";
@@ -72,8 +75,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createSupabaseServiceClient() as any;
+    const { data: before } = await sb.from("bookings").select(SELECT).eq("id", id).maybeSingle();
     const { error } = await sb.from("bookings").delete().eq("id", id);
     if (error) throw new Error(error.message);
+    await logAudit({ entityType: "booking", entityId: id, action: "deleted", performedBy: user.id, oldValues: before ?? null });
     return NextResponse.json({ ok: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete booking";

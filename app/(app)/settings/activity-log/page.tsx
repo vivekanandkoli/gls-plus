@@ -18,10 +18,19 @@ type LogEntry = {
   timestamp: string;
   action: string;
   transaction_id: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
   performed_by: number | null;
   performed_by_email: string | null;
   old_values: Record<string, unknown> | null;
   new_values: Record<string, unknown> | null;
+};
+
+const ENTITY_LABEL: Record<string, string> = {
+  transaction: "Transaction",
+  other_income: "Other income",
+  booking: "Booking",
+  client: "Client",
 };
 
 export default function ActivityLogPage() {
@@ -78,7 +87,7 @@ export default function ActivityLogPage() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Action</TableHead>
-              <TableHead>Transaction</TableHead>
+              <TableHead>Entity</TableHead>
               <TableHead>User</TableHead>
               <TableHead>Changes</TableHead>
             </TableRow>
@@ -90,8 +99,18 @@ export default function ActivityLogPage() {
                   {new Date(e.timestamp).toLocaleString()}
                 </TableCell>
                 <TableCell className="capitalize">{e.action}</TableCell>
-                <TableCell className="font-mono text-xs">
-                  {e.transaction_id?.slice(0, 8) ?? "-"}
+                <TableCell className="text-xs">
+                  {(() => {
+                    const type = e.entity_type ?? (e.transaction_id ? "transaction" : null);
+                    const ref = e.entity_id ?? e.transaction_id ?? null;
+                    if (!type) return "-";
+                    return (
+                      <span>
+                        <span className="text-muted-foreground">{ENTITY_LABEL[type] ?? type}</span>
+                        {ref ? <span className="ml-1 font-mono">{String(ref).slice(0, 8)}</span> : null}
+                      </span>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="text-xs">{e.performed_by_email ?? (e.performed_by ? `#${e.performed_by}` : "-")}</TableCell>
                 <TableCell className="max-w-xs truncate text-xs text-muted-foreground">

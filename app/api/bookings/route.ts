@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { requireAppUser } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
+import { logAudit } from "@/lib/transaction-audit";
 import { embedFkOne } from "@/lib/utils";
 
 const SELECT =
@@ -92,6 +93,8 @@ export async function POST(req: Request) {
       .select(SELECT)
       .single();
     if (error) throw new Error(error.message);
+
+    await logAudit({ entityType: "booking", entityId: data.id, action: "created", performedBy: user.id, newValues: data });
 
     return NextResponse.json({ booking: data }, { status: 201 });
   } catch (e) {

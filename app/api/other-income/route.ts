@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
+import { canonicalCategory } from "@/lib/other-income";
+import { logAudit } from "@/lib/transaction-audit";
 
 const SELECT = "id,date,book,kind,category,amount_thb,description,created_by,created_at";
 
@@ -103,12 +105,15 @@ export async function POST(req: Request) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createSupabaseServiceClient() as any;
+    const canonCategory = await canonicalCategory(sb, category);
     const { data, error } = await sb
       .from("other_income")
-      .insert({ book, kind, category, date, amount_thb: amount, description, created_by: admin.id })
+      .insert({ book, kind, category: canonCategory, date, amount_thb: amount, description, created_by: admin.id })
       .select(SELECT)
       .single();
     if (error) throw new Error(error.message);
+
+    await logAudit({ entityType: "other_income", entityId: data.id, action: "created", performedBy: admin.id, newValues: data });
 
     return NextResponse.json({ row: data }, { status: 201 });
   } catch (e) {

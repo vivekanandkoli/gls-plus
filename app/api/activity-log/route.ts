@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const supabase = createSupabaseServiceClient() as any;
     const { data, error, count } = await supabase
       .from("activity_log")
-      .select("id,created_at,action,old_values,new_values,transaction_id,performed_by", {
+      .select("id,created_at,action,old_values,new_values,transaction_id,entity_type,entity_id,performed_by", {
         count: "exact",
       })
       .order("created_at", { ascending: false })

@@ -108,9 +108,15 @@ export function recalculateWacPl(
 
     if (tx.type === "BUY") {
       const buyValue = roundCurrency(weight * tx.ratePerGram);
-      stockValue = roundCurrency(stockValue + buyValue);
-      stockGm += weight;
-      if (stockGm > 0) {
+      if (stockGm <= 0) {
+        // Book is empty or oversold: start a fresh lot from this purchase so a
+        // prior negative position can never corrupt (explode) the average cost.
+        stockGm = weight;
+        stockValue = buyValue;
+        wac = roundWac(tx.ratePerGram);
+      } else {
+        stockGm += weight;
+        stockValue = roundCurrency(stockValue + buyValue);
         wac = roundWac(stockValue / stockGm);
       }
       map.set(tx.id, {
@@ -123,6 +129,8 @@ export function recalculateWacPl(
       continue;
     }
 
+    // SELL: cost at the current WAC. Flag when we're selling more than we hold.
+    const insufficientStock = stockGm < weight;
     const wacAtSale = wac;
     const costOfSale = roundCurrency(weight * wacAtSale);
     const amount = roundCurrency(tx.amountThb);
@@ -130,10 +138,14 @@ export function recalculateWacPl(
     const plPercent = costOfSale > 0 ? roundCurrency((profitLoss / costOfSale) * 100) : null;
 
     stockGm -= weight;
-    stockValue = roundCurrency(stockValue - costOfSale);
-    const insufficientStock = stockGm <= 0;
     if (stockGm > 0) {
+      // Selling at WAC leaves the average unchanged; recompute for rounding parity.
+      stockValue = roundCurrency(stockValue - costOfSale);
       wac = roundWac(stockValue / stockGm);
+    } else {
+      // Out of stock: value goes to zero; WAC is retained as last-known and will
+      // be re-based by the next BUY (see the BUY branch above).
+      stockValue = 0;
     }
 
     map.set(tx.id, {
@@ -165,14 +177,25 @@ export function getCurrentWacState(
 
     if (tx.type === "BUY") {
       const buyValue = roundCurrency(weight * tx.ratePerGram);
-      stockValue = roundCurrency(stockValue + buyValue);
-      stockGm += weight;
-      if (stockGm > 0) wac = roundWac(stockValue / stockGm);
+      if (stockGm <= 0) {
+        // Empty/oversold: re-base from this purchase (no exploded average).
+        stockGm = weight;
+        stockValue = buyValue;
+        wac = roundWac(tx.ratePerGram);
+      } else {
+        stockGm += weight;
+        stockValue = roundCurrency(stockValue + buyValue);
+        wac = roundWac(stockValue / stockGm);
+      }
     } else {
       const costOfSale = roundCurrency(weight * wac);
       stockGm -= weight;
-      stockValue = roundCurrency(stockValue - costOfSale);
-      if (stockGm > 0) wac = roundWac(stockValue / stockGm);
+      if (stockGm > 0) {
+        stockValue = roundCurrency(stockValue - costOfSale);
+        wac = roundWac(stockValue / stockGm);
+      } else {
+        stockValue = 0;
+      }
     }
   }
 
