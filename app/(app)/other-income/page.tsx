@@ -335,8 +335,6 @@ export default function OtherIncomePage() {
               <Input list="other-income-cats" value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="Rental, Consultant, …" />
               <datalist id="other-income-cats">
                 {categories.map((c) => <option key={c} value={c} />)}
-                <option value="Rental" />
-                <option value="Consultant" />
               </datalist>
             </label>
             <label className="flex flex-col gap-1 text-sm">
