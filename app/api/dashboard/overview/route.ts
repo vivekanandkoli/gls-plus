@@ -26,31 +26,9 @@ export async function GET(req: Request) {
       computeBookSummary(supabase, "unofficial" as Book, year),
     ]);
 
+    // Years that actually have data, for the selector.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
-
-    // Other income net (income - expense) per book for the year — added on top
-    // of the WAC trading profit to get total profit.
-    const { data: oiRows } = await sb
-      .from("other_income")
-      .select("book,kind,amount_thb")
-      .gte("date", `${year}-01-01`)
-      .lte("date", `${year}-12-31`);
-    const oiNet = { official: 0, unofficial: 0 };
-    for (const r of oiRows ?? []) {
-      const amt = Number((r as { amount_thb: number }).amount_thb) || 0;
-      const b = (r as { book: "official" | "unofficial" }).book;
-      const k = (r as { kind: "income" | "expense" }).kind;
-      if (b === "official" || b === "unofficial") oiNet[b] += k === "income" ? amt : -amt;
-    }
-    const r2 = (n: number) => Math.round(n * 100) / 100;
-    const otherIncome = {
-      official: r2(oiNet.official),
-      unofficial: r2(oiNet.unofficial),
-      overall: r2(oiNet.official + oiNet.unofficial),
-    };
-
-    // Years that actually have data, for the selector.
     const { data: yearRows } = await sb
       .from("transactions")
       .select("date")
@@ -88,7 +66,6 @@ export async function GET(req: Request) {
       year,
       years: years.length ? years : [now],
       books: { official, unofficial },
-      otherIncome,
       recent,
     });
   } catch (e) {

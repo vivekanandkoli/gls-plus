@@ -54,7 +54,6 @@ type Overview = {
   year: number;
   years: number[];
   books: { official: BookSummary; unofficial: BookSummary };
-  otherIncome?: { official: number; unofficial: number; overall: number };
   recent: RecentTx[];
 };
 
@@ -261,24 +260,13 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <Stat label="Official (declared) stock" value={grams(off.physicalStockGm)} tone={off.physicalStockGm < 0 ? "neg" : undefined} />
+                  <Stat label="Official (declared)" value={grams(off.physicalStockGm)} tone={off.physicalStockGm < 0 ? "neg" : undefined} />
                   <Stat label="Actual stock (official + unofficial)" value={grams(off.physicalStockGm + unoff.physicalStockGm)} tone="pos" />
-                  {(() => {
-                    const tradingPl = off.profit + unoff.profit;
-                    const oiNet = data?.otherIncome?.overall ?? 0;
-                    const totalPl = tradingPl + oiNet;
-                    return (
-                      <>
-                        <Stat label="Trading P/L (official + unofficial)" value={baht(tradingPl)} tone={tradingPl >= 0 ? "pos" : "neg"} />
-                        <Stat label="Other income (net)" value={baht(oiNet)} tone={oiNet < 0 ? "neg" : undefined} />
-                        <Stat label="Actual total P/L" value={baht(totalPl)} tone={totalPl >= 0 ? "pos" : "neg"} />
-                      </>
-                    );
-                  })()}
+                  <Stat label="Actual P/L" value={baht(unoff.profit)} tone={unoff.profit >= 0 ? "pos" : "neg"} />
                 </div>
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
-                    Actual stock &amp; P/L = official + unofficial. Total P/L adds net Other Income (rental, consultant, …) on top of trading profit.
+                    Actual physical stock = official + unofficial. Official stays as declared; the real vault is the undeclared balance.
                   </p>
                   <Link href="/stock" className="text-xs font-medium text-primary hover:underline">
                     {isAdmin ? "Adjust real stock →" : "Request stock update →"}
