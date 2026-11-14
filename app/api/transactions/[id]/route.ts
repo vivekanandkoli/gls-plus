@@ -163,6 +163,14 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       newValues: null,
     });
 
+    // A booking may have been converted into this transaction. Deleting the
+    // transaction undoes that delivery, so unlink it and return the booking to
+    // pending (this also clears the FK that would otherwise block the delete).
+    await sb
+      .from("bookings")
+      .update({ status: "pending", converted_txn_id: null, delivered_at: null })
+      .eq("converted_txn_id", id);
+
     const { error } = await sb.from("transactions").delete().eq("id", id);
     if (error) throw new Error(error.message);
 
