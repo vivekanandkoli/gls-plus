@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
@@ -144,6 +144,17 @@ export default function TransactionsPage() {
     return cleanup;
   }, [load]);
 
+  // Export the current (filtered) view as .xlsx, mirroring the list's filters.
+  const exportXlsx = useCallback(() => {
+    const params = new URLSearchParams();
+    if (book !== "all") params.set("book", book);
+    if (type !== "all") params.set("type", type);
+    if (year !== "all") params.set("year", year);
+    if (qDebounced) params.set("q", qDebounced);
+    const qs = params.toString();
+    window.location.href = `/api/transactions/export${qs ? `?${qs}` : ""}`;
+  }, [book, type, year, qDebounced]);
+
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rows = data?.rows ?? [];
@@ -190,6 +201,10 @@ export default function TransactionsPage() {
           placeholder="Search invoice or client…"
           className="min-w-[220px] flex-1 rounded-lg border bg-card px-3 py-1.5 text-sm"
         />
+        <Button variant="outline" onClick={exportXlsx} disabled={total === 0}>
+          <Download className="size-4" />
+          Export
+        </Button>
         <Button onClick={() => setCreating(true)}>
           <Plus className="size-4" />
           New transaction

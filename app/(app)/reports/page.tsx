@@ -133,17 +133,48 @@ export default async function ReportsPage() {
   }
 
   const allLinks = isAdmin ? [...publicReportLinks, ...adminOnlyLinks] : publicReportLinks;
+  // Stock Register is the owner's go-to CA export — pull it out and feature it.
+  const featured = allLinks.find((r) => r.href === "/reports/stock-register");
+  const rest = allLinks.filter((r) => r.href !== "/reports/stock-register");
 
   return (
     <PageWrapper
       title="Reports"
       description="Analytics and exports for volume, rates, and profitability."
     >
-      <p className="mb-6 text-sm text-muted-foreground">
-        Choose a report to drill into performance, trends, and client insights.
+      {featured ? (
+        <Link href={featured.href} className="group mb-6 block">
+          <div className="relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-50 to-yellow-50 p-6 shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 dark:from-amber-950/30 dark:to-yellow-950/20 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 rounded-xl bg-amber-100 p-3 dark:bg-amber-900/40">
+                <featured.icon className="h-6 w-6 text-amber-700 dark:text-amber-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-amber-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    For your CA
+                  </span>
+                  <span className="text-lg font-semibold text-foreground">Stock Register</span>
+                </div>
+                <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                  Your full buy/sell register with running stock — the same layout as your
+                  spreadsheet. Pick a year and <span className="font-medium text-foreground">Export to Excel</span> to
+                  send straight to your accountant.
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5 self-start rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-transform duration-200 group-hover:translate-x-0.5 sm:self-center">
+              Open <ArrowRight className="h-4 w-4" />
+            </div>
+          </div>
+        </Link>
+      ) : null}
+
+      <p className="mb-4 text-sm text-muted-foreground">
+        Or choose another report to drill into performance, trends, and client insights.
       </p>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {allLinks.map((r) => {
+        {rest.map((r) => {
           const Icon = r.icon;
           return (
             <Link key={r.href} href={r.href} className="group block">
