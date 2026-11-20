@@ -16,7 +16,11 @@ import {
 import { PRIMARY_NAV, QUICK_ACTIONS } from "@/components/layout/app-nav-config";
 import { useAppUser } from "@/hooks/use-app-user";
 
-const ADMIN_QUICK_ACTION_HREFS = new Set(["/transactions/import", "/settings/audit-log"]);
+const ADMIN_QUICK_ACTION_HREFS = new Set([
+  "/transactions/import",
+  "/settings/audit-log",
+  "/settings/opening-balances",
+]);
 
 export function AppCommandPalette() {
   const router = useRouter();

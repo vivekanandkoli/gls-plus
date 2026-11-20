@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   PiggyBank,
   PlusCircle,
+  Scale,
   ScrollText,
   Settings2,
   UserPlus,
@@ -125,5 +126,11 @@ export const QUICK_ACTIONS: AppNavItem[] = [
     label: "Audit log",
     icon: ScrollText,
     keywords: ["history", "activity"],
+  },
+  {
+    href: "/settings/opening-balances",
+    label: "Edit opening balances",
+    icon: Scale,
+    keywords: ["opening", "balance", "wac", "rate", "stock", "cost basis"],
   },
 ];

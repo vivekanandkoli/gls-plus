@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import Link from "next/link";
+
 import { PageWrapper } from "@/components/layout/PageWrapper";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useAppUser } from "@/hooks/use-app-user";
 
 type Data = {
   year: number;
@@ -69,6 +72,7 @@ function Line({
 
 export default function WacExplainedPage() {
   const now = new Date().getUTCFullYear();
+  const { isAdmin } = useAppUser();
   const [year, setYear] = useState(now);
   const [book, setBook] = useState<"official" | "unofficial">("official");
   const [data, setData] = useState<Data | null>(null);
@@ -206,6 +210,14 @@ export default function WacExplainedPage() {
                 Closing value ÷ closing weight = {baht(data.closing.valueThb)} ÷ {grams(data.closing.stockGm)} ={" "}
                 <span className="font-semibold text-foreground">{rate4(data.closing.wac)} / g</span>
                 <div className="mt-1">This is the figure shown on the dashboard. Based on {data.txnCount} approved transactions.</div>
+                {isAdmin ? (
+                  <div className="mt-2">
+                    Opening value look wrong?{" "}
+                    <Link href="/settings/opening-balances" className="font-medium text-primary hover:underline">
+                      Edit opening balance →
+                    </Link>
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>

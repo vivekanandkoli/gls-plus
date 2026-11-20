@@ -835,6 +835,9 @@ export default function SettingsPage() {
             <Button variant="outline" asChild>
               <a href="/settings/activity-log">Transaction activity log →</a>
             </Button>
+            <Button variant="outline" asChild>
+              <a href="/settings/opening-balances">Edit opening balances →</a>
+            </Button>
           </CardContent>
         </Card>
       ) : null}
