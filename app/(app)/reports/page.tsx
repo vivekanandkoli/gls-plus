@@ -11,6 +11,7 @@ import {
   Layers,
   Banknote,
   Table2,
+  Scale,
 } from "lucide-react";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
@@ -86,6 +87,16 @@ const publicReportLinks = [
     accent: "border-l-cyan-500",
     iconBg: "bg-cyan-100 dark:bg-cyan-900/40",
     iconColor: "text-cyan-700 dark:text-cyan-400",
+  },
+  {
+    href: "/reports/wac-explained",
+    label: "WAC & Profit Explained",
+    desc: "Exactly how the dashboard's WAC and profit are calculated - every value, formula, and a spreadsheet-method comparison",
+    icon: Scale,
+    gradient: "from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/20",
+    accent: "border-l-teal-500",
+    iconBg: "bg-teal-100 dark:bg-teal-900/40",
+    iconColor: "text-teal-700 dark:text-teal-400",
   },
   {
     href: "/reports/revenue",
