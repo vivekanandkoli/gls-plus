@@ -11,13 +11,19 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100", 10) || 100, 500);
     const offset = parseInt(url.searchParams.get("offset") ?? "0", 10) || 0;
+    // Optional filters: entity_type (comma-separated) and entity_id.
+    const entityType = (url.searchParams.get("entityType") ?? "").trim();
+    const entityId = (url.searchParams.get("entityId") ?? "").trim();
 
     const supabase = createSupabaseServiceClient() as any;
-    const { data, error, count } = await supabase
+    let query = supabase
       .from("activity_log")
       .select("id,created_at,action,old_values,new_values,transaction_id,entity_type,entity_id,performed_by", {
         count: "exact",
-      })
+      });
+    if (entityType) query = query.in("entity_type", entityType.split(",").map((s) => s.trim()).filter(Boolean));
+    if (entityId) query = query.eq("entity_id", entityId);
+    const { data, error, count } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 

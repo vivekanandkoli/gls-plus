@@ -32,7 +32,19 @@ type Data = {
   cogsWac: number;
   realizedProfit: number;
   ownerClosingRate: number | null;
+  ownerClosingRateAuto: boolean;
+  latestSellRate: number | null;
   txnCount: number;
+};
+
+type HistoryEntry = {
+  id: number;
+  created_at: string;
+  action: string;
+  entity_type: string;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  performed_by_email: string | null;
 };
 
 const baht = (n: number) => formatCurrency(Number(n) || 0, "THB", "th-TH");
@@ -94,11 +106,13 @@ export default function WacExplainedPage() {
   // Owner/period method inputs (editable, to reconcile to a spreadsheet).
   const [ownerRate, setOwnerRate] = useState<string>("4510");
   const [ownerOpening, setOwnerOpening] = useState<string>("");
+  const [autoRate, setAutoRate] = useState<boolean>(true);
 
   // Apply-to-app flow (admin only).
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyMsg, setApplyMsg] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,10 +122,17 @@ export default function WacExplainedPage() {
       const d: Data = await res.json();
       if (!res.ok) throw new Error((d as { error?: string }).error || "Failed to load");
       setData(d);
-      // Seed the owner-method inputs: opening value from the app, closing rate
-      // from the applied rate if there is one (else the owner's usual 4510).
+      // Seed the owner-method inputs. Opening value from the app. For the
+      // closing rate: if a rate is applied, reflect its mode; otherwise default
+      // to AUTO (follow the latest sell rate), falling back to 4510.
       setOwnerOpening(String(d.opening.valueThb));
-      setOwnerRate(d.ownerClosingRate != null ? String(d.ownerClosingRate) : "4510");
+      if (d.ownerClosingRate != null) {
+        setAutoRate(d.ownerClosingRateAuto);
+        setOwnerRate(String(d.ownerClosingRate));
+      } else {
+        setAutoRate(true);
+        setOwnerRate(d.latestSellRate != null ? String(d.latestSellRate) : "4510");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setData(null);
@@ -134,16 +155,20 @@ export default function WacExplainedPage() {
           year,
           openingStockGm: data.opening.stockGm,
           openingStockValue: Number(ownerOpening) || 0,
-          closingRate: Number(ownerRate) || 0,
+          closingRateAuto: autoRate,
+          closingRate: autoRate ? data.latestSellRate ?? 0 : Number(ownerRate) || 0,
         }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Failed to apply");
       setApplyMsg(
-        `Applied. ${book} ${year} now reports profit the spreadsheet way — declared profit ${baht(d.periodProfit ?? 0)} (WAC was ${baht(d.wacProfit ?? 0)}). The dashboard and reports now use these values.`
+        `Applied. ${book} ${year} now reports profit the spreadsheet way — declared profit ${baht(d.periodProfit ?? 0)} (WAC was ${baht(d.wacProfit ?? 0)})${
+          d.closingRateAuto ? ", closing rate following the latest sell automatically" : ""
+        }. The dashboard and reports now use these values.`
       );
       setConfirmOpen(false);
       await load();
+      await loadHistory();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setConfirmOpen(false);
@@ -158,7 +183,7 @@ export default function WacExplainedPage() {
 
   const owner = useMemo(() => {
     if (!data) return null;
-    const rate = Number(ownerRate) || 0;
+    const rate = autoRate ? data.latestSellRate ?? 0 : Number(ownerRate) || 0;
     const openingVal = ownerOpening === "" ? data.opening.valueThb : Number(ownerOpening) || 0;
     const closingValueOwner = data.closing.stockGm * rate;
     const cogsOwner = openingVal + data.purchases.valueThb - closingValueOwner;
@@ -171,7 +196,24 @@ export default function WacExplainedPage() {
       profitOwner,
       diffVsWac: profitOwner - data.realizedProfit,
     };
-  }, [data, ownerRate, ownerOpening]);
+  }, [data, ownerRate, ownerOpening, autoRate]);
+
+  const loadHistory = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await fetch(
+        `/api/activity-log?entityType=owner_method,opening_balance&entityId=${book}-${year}&limit=20`
+      );
+      const d = await res.json();
+      if (res.ok) setHistory(d.entries ?? []);
+    } catch {
+      /* non-fatal */
+    }
+  }, [isAdmin, book, year]);
+
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   return (
     <PageWrapper
@@ -297,13 +339,31 @@ export default function WacExplainedPage() {
 
               <div className="mb-3 grid grid-cols-2 gap-3">
                 <label className="text-xs text-muted-foreground">
-                  Closing rate (THB/g)
+                  <span className="flex items-center justify-between gap-1">
+                    <span>Closing rate (THB/g)</span>
+                    <span className="flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={autoRate}
+                        onChange={(e) => setAutoRate(e.target.checked)}
+                        className="h-3 w-3"
+                      />
+                      <span className="text-[10px]">auto</span>
+                    </span>
+                  </span>
                   <input
                     type="number"
-                    value={ownerRate}
+                    value={autoRate ? (data.latestSellRate ?? "") : ownerRate}
                     onChange={(e) => setOwnerRate(e.target.value)}
-                    className="mt-1 w-full rounded-md border bg-card px-2 py-1.5 text-sm text-foreground"
+                    disabled={autoRate}
+                    className="mt-1 w-full rounded-md border bg-card px-2 py-1.5 text-sm text-foreground disabled:opacity-60"
                   />
+                  {autoRate ? (
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      Follows latest sell
+                      {data.latestSellRate != null ? ` (${rate4(data.latestSellRate)})` : " — no sells yet"}
+                    </span>
+                  ) : null}
                 </label>
                 <label className="text-xs text-muted-foreground">
                   Opening stock value (THB)
@@ -361,7 +421,11 @@ export default function WacExplainedPage() {
                       <Button
                         className="w-full"
                         onClick={() => setConfirmOpen(true)}
-                        disabled={applying || !ownerRate || !ownerOpening}
+                        disabled={
+                          applying ||
+                          !ownerOpening ||
+                          (autoRate ? data.latestSellRate == null : !ownerRate)
+                        }
                       >
                         Apply this method to the whole app
                       </Button>
@@ -376,6 +440,47 @@ export default function WacExplainedPage() {
             </CardContent>
           </Card>
         </div>
+      ) : null}
+
+      {isAdmin && history.length > 0 ? (
+        <Card className="mt-6">
+          <CardContent className="p-5">
+            <h3 className="mb-1 text-sm font-semibold">Change history</h3>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Every change to the opening value and closing rate for {book} {year}, with who made it.
+            </p>
+            <ul className="divide-y text-sm">
+              {history.map((h) => {
+                const nv = (h.new_values ?? {}) as Record<string, unknown>;
+                const openingVal = nv.opening_stock_value_thb;
+                const closing = nv.closing_rate;
+                const auto = nv.closing_rate_auto;
+                return (
+                  <li key={h.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2">
+                    <div className="min-w-0">
+                      <span className="font-medium capitalize text-foreground">{h.action}</span>{" "}
+                      <span className="text-muted-foreground">
+                        {h.entity_type === "owner_method" ? "owner method" : "opening balance"}
+                      </span>
+                      <div className="text-xs text-muted-foreground">
+                        {h.performed_by_email ?? "system"} · {new Date(h.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right text-xs tabular-nums text-muted-foreground">
+                      {openingVal != null ? <div>opening {baht(Number(openingVal))}</div> : null}
+                      {closing != null ? (
+                        <div>
+                          closing {rate4(Number(closing))}
+                          {auto ? " (auto)" : ""}
+                        </div>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
       ) : null}
 
       <p className="mt-4 text-xs text-muted-foreground">
@@ -402,7 +507,9 @@ export default function WacExplainedPage() {
                       — this re-bases <strong>every {year} {book} transaction&apos;s WAC</strong>.
                     </li>
                     <li>
-                      Closing stock valued at <strong>{rate4(Number(ownerRate) || 0)}/g</strong>.
+                      Closing stock valued at{" "}
+                      <strong>{rate4(owner ? owner.rate : 0)}/g</strong>
+                      {autoRate ? " — automatically following the latest sell rate going forward" : " (fixed)"}.
                     </li>
                     <li>
                       Declared profit becomes{" "}

@@ -57,26 +57,64 @@ export async function fetchOpeningBalance(
  * declared profit uses the period method: sales − (opening + purchases −
  * closingWeight × closingRate).
  */
-export async function fetchClosingRate(
+export type ClosingConfig = { rate: number | null; auto: boolean };
+
+/** Stored closing-rate config for a (book, year): the fixed rate and auto flag. */
+export async function fetchClosingConfig(
   supabase: Client,
   book: Book,
   year: number
-): Promise<number | null> {
-  // Resilient to the column not existing yet (before the migration runs):
-  // any failure means "no closing rate applied" → value closing stock at WAC.
+): Promise<ClosingConfig> {
+  const parse = (data: { closing_rate?: unknown; closing_rate_auto?: unknown } | null): ClosingConfig => {
+    const v = data?.closing_rate;
+    const rate = v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+    return { rate, auto: Boolean(data?.closing_rate_auto) };
+  };
+  // Prefer both columns; if closing_rate_auto doesn't exist yet (migration not
+  // run), fall back to reading just closing_rate so an applied rate still works.
   try {
-    const { data, error } = await supabase
+    const both = await supabase
+      .from("opening_balances")
+      .select("closing_rate,closing_rate_auto")
+      .eq("book", book)
+      .eq("year", year)
+      .maybeSingle();
+    if (!both.error) return parse(both.data);
+
+    const only = await supabase
       .from("opening_balances")
       .select("closing_rate")
       .eq("book", book)
       .eq("year", year)
       .maybeSingle();
-    if (error) return null;
-    const v = data?.closing_rate;
-    return v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+    if (!only.error) return parse(only.data);
+    return { rate: null, auto: false };
   } catch {
-    return null;
+    return { rate: null, auto: false };
   }
+}
+
+/** Rate (THB/g) of the latest approved SELL in a (book, year), or null. */
+export async function fetchLatestSellRate(
+  supabase: Client,
+  book: Book,
+  year: number
+): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("rate_per_gram")
+    .eq("book", book)
+    .eq("type", "SELL")
+    .eq("status", "approved")
+    .gte("date", `${year}-01-01`)
+    .lte("date", `${year}-12-31`)
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return null;
+  const v = data?.rate_per_gram;
+  return v == null || !Number.isFinite(Number(v)) ? null : Number(v);
 }
 
 const BOOK_SELECT = "id,date,type,weight_grams,rate_per_gram,amount_thb,status,created_at";
@@ -208,8 +246,12 @@ export interface BookSummary extends BookState {
   txnCount: number;
   /** Sum of WAC profit/loss over approved SELLs (this book/year). */
   profit: number;
-  /** Owner closing rate applied to this book/year, or null (then WAC is used). */
+  /** Effective owner closing rate for this book/year, or null (then WAC is used). */
   ownerClosingRate: number | null;
+  /** True when the closing rate follows the latest sell rate automatically. */
+  ownerClosingRateAuto: boolean;
+  /** Latest approved SELL rate in this book/year (the auto source), or null. */
+  latestSellRate: number | null;
   /**
    * Declared/period profit = sales − (opening + purchases − closingWeight ×
    * ownerClosingRate). Null when no closing rate is applied. When set, this is
@@ -242,7 +284,17 @@ export async function computeBookSummary(
     }
   }
   const adjustmentGm = await fetchStockAdjustmentTotal(supabase, book, year);
-  const ownerClosingRate = await fetchClosingRate(supabase, book, year);
+  const config = await fetchClosingConfig(supabase, book, year);
+  const latestSellRate = await fetchLatestSellRate(supabase, book, year);
+
+  // Effective closing rate: when auto, follow the latest sell rate (fall back
+  // to the stored rate if there are no sells yet); otherwise the fixed rate.
+  const ownerClosingRate =
+    config.rate == null
+      ? null
+      : config.auto
+        ? (latestSellRate ?? config.rate)
+        : config.rate;
 
   // Period/declared profit (only when a closing rate has been applied):
   // sales − (opening value + purchases − closing stock × closing rate).
@@ -268,7 +320,9 @@ export async function computeBookSummary(
     sellValue: roundCurrency(sellValue),
     txnCount: txs.length,
     profit: roundCurrency(profit),
-    ownerClosingRate,
+    ownerClosingRate: ownerClosingRate != null ? roundWac(ownerClosingRate) : null,
+    ownerClosingRateAuto: config.rate != null && config.auto,
+    latestSellRate: latestSellRate != null ? roundWac(latestSellRate) : null,
     periodProfit,
   };
 }

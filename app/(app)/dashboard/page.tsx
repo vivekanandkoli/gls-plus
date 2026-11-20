@@ -36,6 +36,7 @@ type BookSummary = {
   txnCount: number;
   profit: number;
   ownerClosingRate: number | null;
+  ownerClosingRateAuto: boolean;
   periodProfit: number | null;
 };
 
@@ -139,7 +140,7 @@ function BookCard({
               <Stat
                 label="Profit (declared)"
                 value={baht(s.periodProfit)}
-                sub={`closing @ ${rate(s.ownerClosingRate)}`}
+                sub={`closing @ ${rate(s.ownerClosingRate)}${s.ownerClosingRateAuto ? " (auto)" : ""}`}
                 tone={s.periodProfit >= 0 ? "pos" : "neg"}
               />
             ) : (

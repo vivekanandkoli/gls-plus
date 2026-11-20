@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth-server";
 import { logAudit } from "@/lib/transaction-audit";
 import type { Book } from "@/lib/rbac";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
-import { computeBookSummary, persistBookWac } from "@/lib/wac-book";
+import { computeBookSummary, fetchLatestSellRate, persistBookWac } from "@/lib/wac-book";
 import { roundCurrency, roundWac } from "@/lib/wac-ledger";
 
 /**
@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     const year = Number(body.year);
     const openingStockGm = Number(body.openingStockGm);
     const openingStockValue = Number(body.openingStockValue);
+    const closingRateAuto = Boolean(body.closingRateAuto);
     const closingRate = Number(body.closingRate);
 
     if (!book) return NextResponse.json({ error: "book must be official or unofficial" }, { status: 400 });
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "opening stock (g) must be ≥ 0" }, { status: 400 });
     if (!Number.isFinite(openingStockValue) || openingStockValue < 0)
       return NextResponse.json({ error: "opening stock value must be ≥ 0" }, { status: 400 });
-    if (!Number.isFinite(closingRate) || closingRate < 0)
+    if (!closingRateAuto && (!Number.isFinite(closingRate) || closingRate < 0))
       return NextResponse.json({ error: "closing rate must be ≥ 0" }, { status: 400 });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
 
     const { data: existing } = await sb
       .from("opening_balances")
-      .select("opening_stock_gm,opening_wac,opening_stock_value_thb,closing_rate")
+      .select("opening_stock_gm,opening_wac,opening_stock_value_thb,closing_rate,closing_rate_auto")
       .eq("year", year)
       .eq("book", book)
       .maybeSingle();
@@ -56,7 +57,17 @@ export async function POST(req: Request) {
     const stockGm = roundCurrency(openingStockGm);
     const value = roundCurrency(openingStockValue);
     const wac = stockGm > 0 ? roundWac(value / stockGm) : 0;
-    const rate = roundWac(closingRate);
+
+    // When auto, snapshot the latest sell rate; the live figure still follows
+    // the latest sell going forward (computeBookSummary resolves it each time).
+    const latestSell = closingRateAuto ? await fetchLatestSellRate(sb, book, year) : null;
+    const effectiveRate = closingRateAuto ? (latestSell ?? closingRate) : closingRate;
+    if (!Number.isFinite(effectiveRate) || effectiveRate <= 0)
+      return NextResponse.json(
+        { error: "No sell rate available yet to auto-set the closing rate. Enter a rate manually." },
+        { status: 400 }
+      );
+    const rate = roundWac(effectiveRate);
 
     const { error: upErr } = await sb.from("opening_balances").upsert(
       {
@@ -66,6 +77,7 @@ export async function POST(req: Request) {
         opening_wac: wac,
         opening_stock_value_thb: value,
         closing_rate: rate,
+        closing_rate_auto: closingRateAuto,
       },
       { onConflict: "year,book" }
     );
@@ -90,6 +102,7 @@ export async function POST(req: Request) {
         opening_wac: wac,
         opening_stock_value_thb: value,
         closing_rate: rate,
+        closing_rate_auto: closingRateAuto,
       },
     });
 
@@ -99,6 +112,7 @@ export async function POST(req: Request) {
       year,
       opening: { stockGm, wac, valueThb: value },
       closingRate: rate,
+      closingRateAuto,
       periodProfit: summary.periodProfit,
       wacProfit: summary.profit,
     });

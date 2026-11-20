@@ -3,7 +3,12 @@ import { NextResponse } from "next/server";
 import { requireAppUser } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
 import type { Book } from "@/lib/rbac";
-import { fetchBookTransactions, fetchClosingRate, fetchOpeningBalance } from "@/lib/wac-book";
+import {
+  fetchBookTransactions,
+  fetchClosingConfig,
+  fetchLatestSellRate,
+  fetchOpeningBalance,
+} from "@/lib/wac-book";
 import { getCurrentWacState, recalculateWacPl, roundCurrency, roundWac } from "@/lib/wac-ledger";
 
 /**
@@ -34,7 +39,10 @@ export async function GET(req: Request) {
     const sb = createSupabaseServiceClient() as any;
 
     const opening = await fetchOpeningBalance(sb, book, year);
-    const ownerClosingRate = await fetchClosingRate(sb, book, year);
+    const config = await fetchClosingConfig(sb, book, year);
+    const latestSellRate = await fetchLatestSellRate(sb, book, year);
+    const ownerClosingRate =
+      config.rate == null ? null : config.auto ? (latestSellRate ?? config.rate) : config.rate;
     const txs = await fetchBookTransactions(sb, book, { approvedOnly: true, year });
     const closing = getCurrentWacState(txs, opening);
     const pl = recalculateWacPl(txs, opening);
@@ -96,6 +104,8 @@ export async function GET(req: Request) {
       cogsWac,
       realizedProfit: roundCurrency(realizedProfit),
       ownerClosingRate,
+      ownerClosingRateAuto: config.rate != null && config.auto,
+      latestSellRate,
       txnCount: txs.length,
     });
   } catch (e) {
