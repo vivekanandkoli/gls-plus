@@ -51,6 +51,34 @@ export async function fetchOpeningBalance(
   };
 }
 
+/**
+ * Owner "closing rate" for a (book, year), if one has been applied.
+ * NULL means value closing stock at WAC (the default). When set, the book's
+ * declared profit uses the period method: sales − (opening + purchases −
+ * closingWeight × closingRate).
+ */
+export async function fetchClosingRate(
+  supabase: Client,
+  book: Book,
+  year: number
+): Promise<number | null> {
+  // Resilient to the column not existing yet (before the migration runs):
+  // any failure means "no closing rate applied" → value closing stock at WAC.
+  try {
+    const { data, error } = await supabase
+      .from("opening_balances")
+      .select("closing_rate")
+      .eq("book", book)
+      .eq("year", year)
+      .maybeSingle();
+    if (error) return null;
+    const v = data?.closing_rate;
+    return v == null || !Number.isFinite(Number(v)) ? null : Number(v);
+  } catch {
+    return null;
+  }
+}
+
 const BOOK_SELECT = "id,date,type,weight_grams,rate_per_gram,amount_thb,status,created_at";
 
 /** Approved transactions for one book, in WAC chain order. Optionally scoped to a year. */
@@ -180,6 +208,14 @@ export interface BookSummary extends BookState {
   txnCount: number;
   /** Sum of WAC profit/loss over approved SELLs (this book/year). */
   profit: number;
+  /** Owner closing rate applied to this book/year, or null (then WAC is used). */
+  ownerClosingRate: number | null;
+  /**
+   * Declared/period profit = sales − (opening + purchases − closingWeight ×
+   * ownerClosingRate). Null when no closing rate is applied. When set, this is
+   * the profit the dashboard should show for the book.
+   */
+  periodProfit: number | null;
 }
 
 /** Full dashboard summary for one book/year: stock, WAC, buy/sell totals, profit. */
@@ -206,6 +242,20 @@ export async function computeBookSummary(
     }
   }
   const adjustmentGm = await fetchStockAdjustmentTotal(supabase, book, year);
+  const ownerClosingRate = await fetchClosingRate(supabase, book, year);
+
+  // Period/declared profit (only when a closing rate has been applied):
+  // sales − (opening value + purchases − closing stock × closing rate).
+  const periodProfit =
+    ownerClosingRate != null
+      ? roundCurrency(
+          roundCurrency(sellValue) -
+            (roundCurrency(opening.stockValueThb) +
+              roundCurrency(buyValue) -
+              roundCurrency(state.stockGm * ownerClosingRate))
+        )
+      : null;
+
   return {
     book,
     year,
@@ -218,6 +268,8 @@ export async function computeBookSummary(
     sellValue: roundCurrency(sellValue),
     txnCount: txs.length,
     profit: roundCurrency(profit),
+    ownerClosingRate,
+    periodProfit,
   };
 }
 

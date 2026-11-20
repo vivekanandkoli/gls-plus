@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAppUser } from "@/lib/auth-server";
 import { createSupabaseServiceClient } from "@/lib/supabase-service";
 import type { Book } from "@/lib/rbac";
-import { fetchBookTransactions, fetchOpeningBalance } from "@/lib/wac-book";
+import { fetchBookTransactions, fetchClosingRate, fetchOpeningBalance } from "@/lib/wac-book";
 import { getCurrentWacState, recalculateWacPl, roundCurrency, roundWac } from "@/lib/wac-ledger";
 
 /**
@@ -34,6 +34,7 @@ export async function GET(req: Request) {
     const sb = createSupabaseServiceClient() as any;
 
     const opening = await fetchOpeningBalance(sb, book, year);
+    const ownerClosingRate = await fetchClosingRate(sb, book, year);
     const txs = await fetchBookTransactions(sb, book, { approvedOnly: true, year });
     const closing = getCurrentWacState(txs, opening);
     const pl = recalculateWacPl(txs, opening);
@@ -94,6 +95,7 @@ export async function GET(req: Request) {
       },
       cogsWac,
       realizedProfit: roundCurrency(realizedProfit),
+      ownerClosingRate,
       txnCount: txs.length,
     });
   } catch (e) {

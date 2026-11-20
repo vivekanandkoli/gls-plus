@@ -35,6 +35,8 @@ type BookSummary = {
   sellValue: number;
   txnCount: number;
   profit: number;
+  ownerClosingRate: number | null;
+  periodProfit: number | null;
 };
 
 type RecentTx = {
@@ -133,11 +135,20 @@ function BookCard({
             <Stat label="Stock value" value={baht(s.stockValueThb)} />
             <Stat label="Bought" value={grams(s.buyWeight)} sub={baht(s.buyValue)} />
             <Stat label="Sold" value={grams(s.sellWeight)} sub={baht(s.sellValue)} />
-            <Stat
-              label="WAC profit"
-              value={baht(s.profit)}
-              tone={s.profit >= 0 ? "pos" : "neg"}
-            />
+            {s.ownerClosingRate != null && s.periodProfit != null ? (
+              <Stat
+                label="Profit (declared)"
+                value={baht(s.periodProfit)}
+                sub={`closing @ ${rate(s.ownerClosingRate)}`}
+                tone={s.periodProfit >= 0 ? "pos" : "neg"}
+              />
+            ) : (
+              <Stat
+                label="WAC profit"
+                value={baht(s.profit)}
+                tone={s.profit >= 0 ? "pos" : "neg"}
+              />
+            )}
           </div>
         )}
       </CardContent>

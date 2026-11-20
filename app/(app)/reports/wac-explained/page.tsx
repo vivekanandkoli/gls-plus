@@ -5,6 +5,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { PageWrapper } from "@/components/layout/PageWrapper";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -20,6 +31,7 @@ type Data = {
   closing: { stockGm: number; wac: number; valueThb: number };
   cogsWac: number;
   realizedProfit: number;
+  ownerClosingRate: number | null;
   txnCount: number;
 };
 
@@ -83,16 +95,23 @@ export default function WacExplainedPage() {
   const [ownerRate, setOwnerRate] = useState<string>("4510");
   const [ownerOpening, setOwnerOpening] = useState<string>("");
 
+  // Apply-to-app flow (admin only).
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applyMsg, setApplyMsg] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/reports/wac-explained?year=${year}&book=${book}`);
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Failed to load");
+      const d: Data = await res.json();
+      if (!res.ok) throw new Error((d as { error?: string }).error || "Failed to load");
       setData(d);
-      // Seed the owner-method opening with the app's opening value (user can override).
+      // Seed the owner-method inputs: opening value from the app, closing rate
+      // from the applied rate if there is one (else the owner's usual 4510).
       setOwnerOpening(String(d.opening.valueThb));
+      setOwnerRate(d.ownerClosingRate != null ? String(d.ownerClosingRate) : "4510");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setData(null);
@@ -100,6 +119,38 @@ export default function WacExplainedPage() {
       setLoading(false);
     }
   }, [year, book]);
+
+  async function applyOwnerMethod() {
+    if (!data) return;
+    setApplying(true);
+    setApplyMsg(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/reports/apply-owner-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          book,
+          year,
+          openingStockGm: data.opening.stockGm,
+          openingStockValue: Number(ownerOpening) || 0,
+          closingRate: Number(ownerRate) || 0,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed to apply");
+      setApplyMsg(
+        `Applied. ${book} ${year} now reports profit the spreadsheet way — declared profit ${baht(d.periodProfit ?? 0)} (WAC was ${baht(d.wacProfit ?? 0)}). The dashboard and reports now use these values.`
+      );
+      setConfirmOpen(false);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setConfirmOpen(false);
+    } finally {
+      setApplying(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -161,6 +212,9 @@ export default function WacExplainedPage() {
 
       {error ? (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+      ) : null}
+      {applyMsg ? (
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{applyMsg}</div>
       ) : null}
 
       {loading && !data ? (
@@ -230,6 +284,11 @@ export default function WacExplainedPage() {
                   Spreadsheet method
                 </span>
                 <h3 className="text-base font-semibold">Owner / period method</h3>
+                {data.ownerClosingRate != null ? (
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                    Applied
+                  </span>
+                ) : null}
               </div>
               <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
                 Same sales and purchases, but closing stock is marked to a <strong>rate you choose</strong> (your
@@ -296,6 +355,22 @@ export default function WacExplainedPage() {
                       the opening value you entered.
                     </div>
                   </div>
+
+                  {isAdmin ? (
+                    <div className="mt-4 border-t pt-3">
+                      <Button
+                        className="w-full"
+                        onClick={() => setConfirmOpen(true)}
+                        disabled={applying || !ownerRate || !ownerOpening}
+                      >
+                        Apply this method to the whole app
+                      </Button>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Makes <strong>{book} {year}</strong> report profit this way everywhere (dashboard &amp; reports),
+                        and re-bases every transaction&apos;s WAC to the opening value above.
+                      </p>
+                    </div>
+                  ) : null}
                 </>
               ) : null}
             </CardContent>
@@ -305,8 +380,59 @@ export default function WacExplainedPage() {
 
       <p className="mt-4 text-xs text-muted-foreground">
         Neither method is &ldquo;wrong&rdquo; — WAC values unsold stock at actual average cost (realized margin only);
-        the owner method marks unsold stock to a chosen market rate (books an unrealized gain). The dashboard uses WAC.
+        the owner method marks unsold stock to a chosen market rate (books an unrealized gain). Once applied, the
+        dashboard shows the owner/period profit for that book &amp; year.
       </p>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apply the spreadsheet method to the whole app?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <div>
+                  This changes the reported profit for the <strong>{book}</strong> book,{" "}
+                  <strong>{year}</strong>, everywhere in the app (dashboard &amp; reports):
+                </div>
+                {data ? (
+                  <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                    <li>
+                      Opening stock value set to <strong>{baht(Number(ownerOpening) || 0)}</strong>{" "}
+                      ({grams(data.opening.stockGm)} @ {rate4((Number(ownerOpening) || 0) / (data.opening.stockGm || 1))}/g)
+                      — this re-bases <strong>every {year} {book} transaction&apos;s WAC</strong>.
+                    </li>
+                    <li>
+                      Closing stock valued at <strong>{rate4(Number(ownerRate) || 0)}/g</strong>.
+                    </li>
+                    <li>
+                      Declared profit becomes{" "}
+                      <strong className={cn(owner && owner.profitOwner >= 0 ? "text-emerald-600" : "text-red-600")}>
+                        {owner ? baht(owner.profitOwner) : "—"}
+                      </strong>{" "}
+                      (was {baht(data.realizedProfit)} on WAC).
+                    </li>
+                  </ul>
+                ) : null}
+                <div className="text-xs text-muted-foreground">
+                  Per-sale cost stays weighted-average. You can change these values again any time.
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={applying}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void applyOwnerMethod();
+              }}
+              disabled={applying}
+            >
+              {applying ? "Applying…" : "Yes, apply to all transactions"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageWrapper>
   );
 }
